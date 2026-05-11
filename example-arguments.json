@@ -1,0 +1,13 @@
+{
+    "global_arguments": {
+        "dataset": "/mnt/shared_master/dataset",
+        "experiment": "interactive_run_01",
+        "cuda": true,
+        "gpu_id": 0,
+        "epochs": 1,
+        "learning_rate": 0.00067,
+        "bs": 16,
+        "codestream_path": "experiments/interactive_run_01/codestream/150"
+    },
+    "jobs": ["ELIC", "JPEG-AI"]
+}

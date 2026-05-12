@@ -9,5 +9,20 @@
         "bs": 16,
         "codestream_path": "experiments/interactive_run_01/codestream/150"
     },
-    "jobs": ["ELIC", "JPEG-AI"]
+    "tasks": {
+        "ELIC": {
+            "task_name": "ELIC",
+            "directory": "ELIC",
+            "argumemts":{
+                
+            }
+        },
+        "JPEG-AI": {
+            "task_name": "JPEG-AI",
+            "directory": "JPEG-AI",
+            "argumemts":{
+                
+            }
+        }
+    }
 }

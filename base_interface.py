@@ -1,4 +1,5 @@
 import subprocess
+import os
 
 class BaseInterface:
     """
@@ -9,18 +10,17 @@ class BaseInterface:
     ALIASES = {}
     CLI_MAPPING = {}
     EXECUTION_PATH = ""
+    
+    WORKING_DIR = None
 
     def __init__(self, job_args=None, global_args=None):
         job_args = job_args or {}
         global_args = global_args or {}
         
-        # 1. Start with the interface's defaults
         self.params = self.DEFAULT_VARS.copy()
         
-        # 2. Normalize job arguments (Translate aliases)
         clean_job_args = {self.ALIASES.get(k, k): v for k, v in job_args.items()}
         
-        # 3. Normalize global arguments (Translate aliases)
         clean_global_args = {self.ALIASES.get(k, k): v for k, v in global_args.items()}
 
         # 4. Apply the hierarchy!
@@ -53,8 +53,18 @@ class BaseInterface:
     def execute(self):
         command = self.build_command()
         print(f"Executing:\n{' '.join(command)}\n")
+        
+        run_dir = os.path.abspath(self.WORKING_DIR) if self.WORKING_DIR else os.getcwd()
+        
+        custom_env = os.environ.copy()
+        
+        if "PYTHONPATH" in custom_env:
+            custom_env["PYTHONPATH"] = f"{run_dir}:{custom_env['PYTHONPATH']}"
+        else:
+            custom_env["PYTHONPATH"] = run_dir
+        
         try:
-            subprocess.run(command, check=True, text=True)
+            subprocess.run(command, check=True, text=True, cwd=run_dir, env=custom_env)
             print("[SUCCESS] Script completed.")
         except subprocess.CalledProcessError as e:
             print(f"[ERROR] Execution failed with code {e.returncode}")

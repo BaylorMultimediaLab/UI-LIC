@@ -5,8 +5,8 @@ from base_interface import BaseInterface
 class ELICTrainInterface(BaseInterface):
 
     TASK_NAME = "ELIC"
-
-    EXECUTION_PATH = "ELIC/playground/train.py"
+    
+    EXECUTION_PATH = "playground/train.py"
     
     # Enforce these to avoid accidental default overwrites
     REQUIRED_ARGS = ["experiment", "dataset"]

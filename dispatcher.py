@@ -68,18 +68,21 @@ class Dispatcher:
                     print(f"[FATAL] Argument file '{self.arg_json_path}' not found. Exiting.")
                     return
         
-        global_args = config.get("arguments", {})
-        job_queue = config.get("jobs", [])
-
-        if not job_queue:
-            print("[WARNING] No jobs found in the 'jobs' array. Nothing to execute.")
+        global_args = config.get("global_arguments", {})
+        tasks = config.get("tasks", {})
+        
+        if not tasks:
+            print("[WARNING] No jobs found in the 'jobs' dictionary. Nothing to execute.")
             return
 
 
-        for step, task_name in enumerate(job_queue, start=1):
+        for step, (task_name, task_info) in enumerate(tasks.items(), start=1):
             # print("\n" + "="*50)
             # print(f"Step {step}/{len(job_queue)}: Starting [{task_name}]")
             # print("="*50)
+            
+            task_name = task_info.get("task_name")
+            custom_dir = task_info.get("directory")
 
             # Check if the requested string matches a loaded Interface's task_name
             if task_name not in self.registry:
@@ -92,7 +95,10 @@ class Dispatcher:
             InterfaceClass = self.registry[task_name]
             interface_instance = InterfaceClass(global_args=global_args)
 
-            # 5. Verify the Interface has everything it needs to run
+            # Override the Interface's default directory if one was provided in the JSON
+            if custom_dir:
+                interface_instance.WORKING_DIR = custom_dir
+                
             is_valid, missing_args = interface_instance.validate()
             
             if not is_valid:

@@ -14,7 +14,7 @@ class ELICTrainInterface(BaseInterface):
     # Mirrored exactly from your argparse defaults
     DEFAULT_VARS = {
         "experiment": "0483mse",
-        "dataset": "/home/npr/dataset/",
+        "dataset": "/mnt/c/Users/Nicholas_Nolen1/data",
         "epochs": 60000,
         "learning_rate": 1e-4,
         "num_workers": 8,
@@ -25,8 +25,8 @@ class ELICTrainInterface(BaseInterface):
         "aux_learning_rate": 1e-3,
         "patch_size": [256, 256],
         "gpu_id": 0,
-        "cuda": True,
-        "save": True,
+        "cuda": "True",
+        "save": "True",
         "seed": 192.1,
         "clip_max_norm": 1.0,
         "checkpoint": None

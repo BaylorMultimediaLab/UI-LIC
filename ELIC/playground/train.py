@@ -29,6 +29,18 @@ def main():
     Image.MAX_IMAGE_PIXELS = None
 
     args = train_options()
+
+    # --- DISPATCHER TYPE-CASTING FIX ---
+    # Convert CLI strings back into the math types PyTorch expects
+    args.learning_rate = float(args.learning_rate)
+    args.aux_learning_rate = float(args.aux_learning_rate)
+    args.lmbda = float(args.lmbda)
+    args.clip_max_norm = float(args.clip_max_norm)
+    args.batch_size = int(args.batch_size)
+    args.test_batch_size = int(args.test_batch_size)
+    args.epochs = int(args.epochs)
+    # -----------------------------------
+
     config = model_config()
 
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)

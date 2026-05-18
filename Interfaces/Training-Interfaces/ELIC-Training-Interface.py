@@ -15,7 +15,7 @@ class ELICTrainInterface(BaseInterface):
     # Enforce these to avoid accidental default overwrites
     REQUIRED_ARGS = ["experiment", "dataset"]
 
-    # Mirrored exactly from your argparse defaults
+    # Mirrored exactly from the argparse defaults
     DEFAULT_VARS = {
         "experiment": "0483mse",
         "dataset": "/mnt/c/Users/Nicholas_Nolen1/data",
@@ -27,7 +27,7 @@ class ELICTrainInterface(BaseInterface):
         "batch_size": 8,
         "test_batch_size": 1,
         "aux_learning_rate": 1e-3,
-        "patch_size": [256, 256],
+        "patch_size": [128, 128],
         "gpu_id": 0,
         "cuda": "True",
         "save": "True",

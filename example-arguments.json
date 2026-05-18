@@ -1,6 +1,6 @@
 {
     "global_arguments": {
-        "dataset": "/mnt/c/Users/Nicholas_Nolen1/data",
+        "dataset": "/Users/nicholasnolen/Desktop/Intro_to_Machine_Learning/Semester_Project/Modified_Training_Data/Combined_Training_sets",
         "experiment": "interactive_run_01",
         "cuda": "True",
         "gpu_id": 0,

@@ -6,12 +6,12 @@ def setup_conda_env(env_path: str, requirements_file: str, python_version: str =
     """
     Dynamically creates a Conda environment and installs requirements.
     """
-    # 1. Verify the requirements file exists before starting
+    # Verify the requirements file exists before starting
     if not os.path.exists(requirements_file):
         print(f"Error: Could not find '{requirements_file}'")
         sys.exit(1)
 
-    print(f"Creating Conda environment at: {env_path}")
+    print(f"Creating Conda environment at: {env_path} (Python {python_version})")
     
     # Command to create the environment
     create_cmd = [
@@ -26,11 +26,8 @@ def setup_conda_env(env_path: str, requirements_file: str, python_version: str =
         subprocess.run(create_cmd, check=True)
         print("Environment created successfully.")
 
-        print(f"Installing dependencies from {requirements_file}...")
-        
-        # Command to install requirements.
-        # Note: We use `conda run` to execute pip inside the newly created environment.
-        # This handles packages that might only be on PyPI and not in Conda channels.
+
+        print(f"Installing remaining dependencies from {requirements_file}...")
         install_cmd = [
             "conda", "run",
             "--prefix", env_path,
@@ -49,15 +46,32 @@ def setup_conda_env(env_path: str, requirements_file: str, python_version: str =
         print("\n[!] Conda is not recognized as a command. Ensure it is installed and in your system PATH.")
         sys.exit(1)
 
-# --- Example Usage ---
 if __name__ == "__main__":
-    # Define your paths here (can be absolute or relative)
-    TARGET_ENV_PATH = "./ELIC/training-testing-env"
-    REQUIREMENTS_PATH = "./ELIC/requirements.txt"
+    print("--- Environment Setup Configuration ---")
+    print("(Press Enter on an empty line at an env or requirements prompt to cancel and exit)")
+    print("-" * 40)
     
-    # You can quickly create a dummy requirements.txt for testing
-    if not os.path.exists(REQUIREMENTS_PATH):
-        with open(REQUIREMENTS_PATH, "w") as f:
-            f.write("requests==2.31.0\nnumpy==1.26.0\n")
-            
-    setup_conda_env(TARGET_ENV_PATH, REQUIREMENTS_PATH)
+    # 1. Get Environment Path
+    TARGET_ENV_PATH = input("Enter target environment path: ").strip()
+    if not TARGET_ENV_PATH:
+        print("\n[CANCELLED] No environment path provided. Exiting script.")
+        sys.exit(0)
+        
+    # 2. Get Requirements Path
+    REQUIREMENTS_PATH = input("Enter requirements file path: ").strip()
+    if not REQUIREMENTS_PATH:
+        print("\n[CANCELLED] No requirements path provided. Exiting script.")
+        sys.exit(0)
+        
+    # 3. Get Python Version (Optional, defaults to 3.10)
+    PYTHON_VERSION = input("Enter Python version [Default: 3.10]: ").strip()
+    if not PYTHON_VERSION:
+        PYTHON_VERSION = "3.10"
+        
+    print("-" * 40)
+    print(f"Using Environment Path: {TARGET_ENV_PATH}")
+    print(f"Using Requirements Path: {REQUIREMENTS_PATH}")
+    print(f"Using Python Version:    {PYTHON_VERSION}")
+    print("-" * 40)
+                
+    setup_conda_env(TARGET_ENV_PATH, REQUIREMENTS_PATH, PYTHON_VERSION)

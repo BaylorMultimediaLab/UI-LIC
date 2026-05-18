@@ -18,7 +18,7 @@ class ELICTrainInterface(BaseInterface):
     # Mirrored exactly from your argparse defaults
     DEFAULT_VARS = {
         "experiment": "0483mse",
-        "dataset": "/home/npr/dataset/",
+        "dataset": "/mnt/c/Users/Nicholas_Nolen1/data",
         "epochs": 60000,
         "learning_rate": 1e-4,
         "num_workers": 8,

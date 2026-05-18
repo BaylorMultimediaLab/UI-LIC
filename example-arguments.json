@@ -1,6 +1,6 @@
 {
     "global_arguments": {
-        "dataset": "/mnt/shared_master/dataset",
+        "dataset": "/mnt/c/Users/Nicholas_Nolen1/data",
         "experiment": "interactive_run_01",
         "cuda": "True",
         "gpu_id": 0,

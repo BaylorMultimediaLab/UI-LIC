@@ -11,6 +11,19 @@ def train_options():
         required=False,
         help="Experiment name"
     )
+    # added arguments to enable dynamic paths for training and testing
+    parser.add_argument(
+        "--train-split",
+        type=str, 
+        default="train256_0", 
+        help="Name of the training subfolder"
+    )
+    parser.add_argument(
+        "--test-split", 
+        type=str, 
+        default="kodak", 
+        help="Name of the validation/testing subfolder"
+    )
     parser.add_argument(
         "-d",
         "--dataset",

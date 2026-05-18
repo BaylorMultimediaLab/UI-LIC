@@ -73,10 +73,14 @@ def main():
         [transforms.ToTensor()]
     )
 
-    # modified (split name)
-    train_dataset = ImageFolder(args.dataset, split="train256_0", transform=train_transforms)
-    # modified ?
-    test_dataset = ImageFolder(args.dataset, split="kodak", transform=test_transforms)
+    # get names from args
+    
+    train_split_name = getattr(args, 'train_split', 'train256_0')
+    test_split_name = getattr(args, 'test_split', 'kodak')
+    
+    train_dataset = ImageFolder(args.dataset, split=train_split_name, transform=train_transforms)
+    test_dataset = ImageFolder(args.dataset, split=test_split_name, transform=test_transforms)
+
 
     train_dataloader = DataLoader(
         train_dataset,

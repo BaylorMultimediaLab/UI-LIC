@@ -83,6 +83,7 @@ class Dispatcher:
             custom_dir = task_info.get("directory")
             
             env_path = task_info.get("env_path")
+            job_args = task_info.get("arguments", {})
 
             # Check if the requested string matches a loaded Interface's task_name
             if task_name not in self.registry:
@@ -93,8 +94,8 @@ class Dispatcher:
             # 4. Instantiate the Interface
             # We pass the entire global pool. The interface's ALIASES will safely extract only what it needs.
             InterfaceClass = self.registry[task_name]
-            interface_instance = InterfaceClass(global_args=global_args)
-
+            interface_instance = InterfaceClass(job_args=job_args, global_args=global_args)
+            
             # Override the Interface's default directory if one was provided in the JSON
             if custom_dir:
                 interface_instance.WORKING_DIR = custom_dir

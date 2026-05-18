@@ -18,8 +18,9 @@ class ELICTrainInterface(BaseInterface):
     # Mirrored exactly from the argparse defaults
     DEFAULT_VARS = {
         "experiment": "0483mse",
-        "dataset": "/mnt/c/Users/Nicholas_Nolen1/data",
-        "epochs": 60000,
+        "dataset": "/mnt/c/Users/Nicholas_Nolen1/data", 
+        "train_split": "train256_0",  # Default subfolder
+        "test_split": "kodak",        # Default subfolder        "epochs": 60000,
         "learning_rate": 1e-4,
         "num_workers": 8,
         "lmbda": 0.0483,
@@ -53,6 +54,8 @@ class ELICTrainInterface(BaseInterface):
     CLI_MAPPING = {
         "experiment": "--experiment",
         "dataset": "--dataset",
+        "train_split": "--train-split", 
+        "test_split": "--test-split",
         "epochs": "--epochs",
         "learning_rate": "--learning-rate",
         "num_workers": "--num-workers",

@@ -1,12 +1,13 @@
 {
     "global_arguments": {
-        "dataset": "/Users/nicholasnolen/Desktop/Intro_to_Machine_Learning/Semester_Project/Modified_Training_Data/Combined_Training_sets",
-        "experiment": "interactive_run_01",
+        "dataset": "/Users/nicholasnolen/Desktop/Intro_to_Machine_Learning/Semester_Project/Modified_Training_Data/Combined_Training_sets",        
         "cuda": "True",
         "gpu_id": 0,
         "epochs": 1,
         "learning_rate": 0.00067,
-        "bs": 16,
+        "batch_size": 16,
+        "test_batch_size": 1,
+        "patch_size": [128, 128],
         "codestream_path": "experiments/interactive_run_01/codestream/150"
     },
     "tasks": {
@@ -14,14 +15,17 @@
             "env_path": "training-testing-env",
             "task_name": "ELIC",
             "directory": "ELIC",
-            "arguments":{
-                
+            "arguments": {
+                "experiment": "interactive_run_01",
+                "train_split": "Positive",
+                "test_split": "Negative",
+                "save": "True"
             }
         },
         "JPEG-AI": {
             "task_name": "JPEG-AI",
             "directory": "JPEG-AI",
-            "arguments":{
+            "arguments": {
                 
             }
         }

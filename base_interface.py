@@ -21,13 +21,12 @@ class BaseInterface:
         self.params = self.DEFAULT_VARS.copy()
         
         clean_job_args = {self.ALIASES.get(k, k): v for k, v in job_args.items()}
-        
         clean_global_args = {self.ALIASES.get(k, k): v for k, v in global_args.items()}
 
-        # 4. Apply the hierarchy!
-        self.params.update(clean_job_args)       # Local args overwrite defaults
-        self.params.update(clean_global_args)    # Global args overwrite EVERYTHING
-
+        self.params.update(clean_global_args)    
+        self.params.update(clean_job_args)
+        
+        
     def validate(self):
         missing = [req for req in self.REQUIRED_ARGS if self.params.get(req) is None]
         if missing:

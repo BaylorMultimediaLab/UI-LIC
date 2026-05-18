@@ -19,8 +19,6 @@ class Dispatcher:
         if not os.path.exists(self.arg_json_path):
             raise FileNotFoundError(f"Error: Argument file '{self.arg_json_path}' not found.")
 
-
-
         if train_interfaces_path:
             self._load_interfaces_from_dir(train_interfaces_path, "Train")
             
@@ -83,6 +81,8 @@ class Dispatcher:
             
             task_name = task_info.get("task_name")
             custom_dir = task_info.get("directory")
+            
+            env_path = task_info.get("env_path")
 
             # Check if the requested string matches a loaded Interface's task_name
             if task_name not in self.registry:
@@ -99,6 +99,9 @@ class Dispatcher:
             if custom_dir:
                 interface_instance.WORKING_DIR = custom_dir
                 
+            if env_path:
+                interface_instance.ENV_PATH = env_path
+                
             is_valid, missing_args = interface_instance.validate()
             
             if not is_valid:
@@ -106,7 +109,6 @@ class Dispatcher:
                 print(f"  -> Skipping to next job...")
                 continue
 
-            # 6. Execute the script
             print("  -> [VERIFIED] All required arguments present. Executing...\n")
             try:
                 interface_instance.execute()
@@ -118,8 +120,6 @@ class Dispatcher:
 def parse_args():
     parser = argparse.ArgumentParser(description="Unified Dispatcher for Training and Testing")
     
-    # Note: Using action="store_true" is standard for boolean flags in Python CLI.
-    # If the user types --train, args.train becomes True. If omitted, it's False.
     parser.add_argument('--train', action='store_true', help="Enable training phase")
     parser.add_argument('--test', action='store_true', help="Enable testing phase")
 

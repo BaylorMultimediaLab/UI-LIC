@@ -6,3 +6,8 @@ bd-metric
 pillow
 torch
 pybind11
+tensorboard
+torchvision
+compressai==1.1.4
+utils
+einops

@@ -6,7 +6,11 @@ class ELICTrainInterface(BaseInterface):
 
     TASK_NAME = "ELIC"
     
-    EXECUTION_PATH = "playground/train.py"
+    
+    ## USING MODULE EXECUTION RATHER THAN EXPLICIT PATH BASED
+    USE_MODULE_EXECUTION = True
+    
+    EXECUTION_PATH = "playground.train"
     
     # Enforce these to avoid accidental default overwrites
     REQUIRED_ARGS = ["experiment", "dataset"]
@@ -25,8 +29,8 @@ class ELICTrainInterface(BaseInterface):
         "aux_learning_rate": 1e-3,
         "patch_size": [256, 256],
         "gpu_id": 0,
-        "cuda": True,
-        "save": True,
+        "cuda": "True",
+        "save": "True",
         "seed": 192.1,
         "clip_max_norm": 1.0,
         "checkpoint": None

@@ -2,7 +2,7 @@
     "global_arguments": {
         "dataset": "/mnt/shared_master/dataset",
         "experiment": "interactive_run_01",
-        "cuda": true,
+        "cuda": "True",
         "gpu_id": 0,
         "epochs": 1,
         "learning_rate": 0.00067,
@@ -11,16 +11,17 @@
     },
     "tasks": {
         "ELIC": {
+            "env_path": "training-testing-env",
             "task_name": "ELIC",
             "directory": "ELIC",
-            "argumemts":{
+            "arguments":{
                 
             }
         },
         "JPEG-AI": {
             "task_name": "JPEG-AI",
             "directory": "JPEG-AI",
-            "argumemts":{
+            "arguments":{
                 
             }
         }

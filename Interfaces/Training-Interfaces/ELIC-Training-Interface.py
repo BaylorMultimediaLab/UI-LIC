@@ -30,8 +30,8 @@ class ELICTrainInterface(BaseInterface):
         "aux_learning_rate": 1e-3,
         "patch_size": [128, 128],
         "gpu_id": 0,
-        "cuda": "True",
-        "save": "True",
+        "cuda": True,
+        "save": True,
         "seed": 192.1,
         "clip_max_norm": 1.0,
         "checkpoint": None

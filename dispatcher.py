@@ -53,6 +53,24 @@ class Dispatcher:
                         print(f"  -> [WARNING] Failed to load {filename}: {e}")
 
 
+    def _normalize_booleans(self, args_dict):
+        """Helper to recursively scan and turn 'True'/'False' strings into Python booleans."""
+        normalized = {}
+        for k, v in args_dict.items():
+            if isinstance(v, str):
+                cleaned = v.strip().lower()
+                if cleaned == "true":
+                    normalized[k] = True
+                elif cleaned == "false":
+                    normalized[k] = False
+                else:
+                    normalized[k] = v
+            elif isinstance(v, dict):
+                normalized[k] = self._normalize_booleans(v)
+            else:
+                normalized[k] = v
+        return normalized
+
     
     def run(self):
         # Load arguments from JSON
@@ -72,29 +90,33 @@ class Dispatcher:
         if not tasks:
             print("[WARNING] No jobs found in the 'jobs' dictionary. Nothing to execute.")
             return
+        
+        clean_global_args = self._normalize_booleans(global_args)
 
 
-        for step, (task_name, task_info) in enumerate(tasks.items(), start=1):
+        for step, (task_key, task_info) in enumerate(tasks.items(), start=1):
             # print("\n" + "="*50)
             # print(f"Step {step}/{len(job_queue)}: Starting [{task_name}]")
             # print("="*50)
             
-            task_name = task_info.get("task_name")
+            target_task_name = task_info.get("task_name", task_key)
             custom_dir = task_info.get("directory")
             
             env_path = task_info.get("env_path")
             job_args = task_info.get("arguments", {})
 
             # Check if the requested string matches a loaded Interface's task_name
-            if task_name not in self.registry:
+            if target_task_name not in self.registry:
                 print(f"  -> [SKIPPED] Unknown task type: '{task_name}'.")
                 print(f"     (Make sure an interface file with TASK_NAME = '{task_name}' exists).")
                 continue
+            
+            clean_job_args = self._normalize_booleans(job_args)
 
             # 4. Instantiate the Interface
             # We pass the entire global pool. The interface's ALIASES will safely extract only what it needs.
-            InterfaceClass = self.registry[task_name]
-            interface_instance = InterfaceClass(job_args=job_args, global_args=global_args)
+            InterfaceClass = self.registry[target_task_name]
+            interface_instance = InterfaceClass(job_args=clean_job_args, global_args=clean_global_args)            
             
             # Override the Interface's default directory if one was provided in the JSON
             if custom_dir:
@@ -114,7 +136,7 @@ class Dispatcher:
             try:
                 interface_instance.execute()
             except Exception as e:
-                print(f"\n  -> [ERROR] Execution of '{task_name}' crashed: {e}")
+                print(f"\n  -> [ERROR] Execution of '{target_task_name}' crashed: {e}")
                 print("  -> Continuing to next job in the queue...")
 
 

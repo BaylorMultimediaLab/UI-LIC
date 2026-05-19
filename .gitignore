@@ -7,6 +7,8 @@ testing-training-enviornment
 # C extensions
 *.so
 
+data
+
 # Distribution / packaging
 .Python
 build/

@@ -26,7 +26,6 @@ def setup_conda_env(env_path: str, requirements_file: str, python_version: str =
         subprocess.run(create_cmd, check=True)
         print("Environment created successfully.")
 
-
         print(f"Installing remaining dependencies from {requirements_file}...")
         install_cmd = [
             "conda", "run",

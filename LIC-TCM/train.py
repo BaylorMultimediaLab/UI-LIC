@@ -21,6 +21,8 @@ import os
 torch.backends.cudnn.deterministic=True
 torch.backends.cudnn.benchmark=False
 
+from pathlib import Path
+
 def compute_msssim(a, b):
     return ms_ssim(a, b, data_range=1.)
 
@@ -103,11 +105,11 @@ def configure_optimizers(net, args):
 
     optimizer = optim.Adam(
         (params_dict[n] for n in sorted(parameters)),
-        lr=args.learning_rate,
+        lr=float(args.learning_rate),
     )
     aux_optimizer = optim.Adam(
         (params_dict[n] for n in sorted(aux_parameters)),
-        lr=args.aux_learning_rate,
+        lr=float(args.aux_learning_rate),
     )
     return optimizer, aux_optimizer
 
@@ -235,6 +237,18 @@ def parse_args(argv):
         "-d", "--dataset", type=str, required=True, help="Training dataset"
     )
     parser.add_argument(
+        "-tr_d",
+        "--train_dataset",
+        type=str, 
+        help="Training dataset"
+    )
+    parser.add_argument(
+        "-te_d", 
+        "--test_dataset", 
+        type=str, 
+        help="Testing dataset"
+    )
+    parser.add_argument(
         "-e",
         "--epochs",
         default=50,
@@ -338,9 +352,22 @@ def main(argv):
     )
 
 
-    train_dataset = ImageFolder(args.dataset, split="train", transform=train_transforms)
-    test_dataset = ImageFolder(args.dataset, split="test", transform=test_transforms)
+    train_path = Path(args.train_dataset)
+    test_path = Path(args.test_dataset)
 
+    # 2. Dynamically feed the parent directory as 'root' and the folder name as 'split'
+    train_dataset = ImageFolder(
+        root=str(train_path.parent), 
+        split=train_path.name, 
+        transform=train_transforms
+    )
+    
+    test_dataset = ImageFolder(
+        root=str(test_path.parent), 
+        split=test_path.name, 
+        transform=test_transforms
+    )
+    
     device = "cuda" if args.cuda and torch.cuda.is_available() else "cpu"
     print(device)
     device = 'cuda'

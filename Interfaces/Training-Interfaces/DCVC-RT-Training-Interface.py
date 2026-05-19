@@ -65,3 +65,23 @@ class DCVCRTTrainInterface(BaseInterface):
         "val_every": "--val_every",
         "val_batches": "--val_batches"
     }
+    
+    def __init__(self, job_args=None, global_args=None):
+        # Call the parent BaseInterface init to load and merge all arguments
+        super().__init__(job_args, global_args)
+        
+        # --- UNIFIED TRANSLATION LOGIC ---
+        
+        # 1. Translate the unified 'cuda' boolean into DCVC-RT's 'device' string
+        if "cuda" in self.params:
+            if self.params["cuda"] is True:
+                self.params["device"] = "cuda"
+            elif self.params["cuda"] is False:
+                self.params["device"] = "cpu"
+            # Remove 'cuda' so the builder doesn't try to append it
+            del self.params["cuda"]
+            
+        # 2. Translate unified list patch sizes (e.g., [256, 256]) to a single integer
+        if "patch_size" in self.params and isinstance(self.params["patch_size"], (list, tuple)):
+            # Grab the first dimension to satisfy DCVC-RT's single-int argparse requirement
+            self.params["patch_size"] = self.params["patch_size"][0]

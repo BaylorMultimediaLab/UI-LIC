@@ -60,7 +60,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--out_dir", type=str, default="Training/runs/intra", help="Output directory")
 
     # Data pipeline settings.
-    p.add_argument("--patch_size", type=int, default=256)
+    p.add_argument("--patch_size", type=int, nargs=2, default=(256, 256), help="Size of the patches to be cropped (Height Width)")    
     p.add_argument("--batch_size", type=int, default=8)
     # Default to a conservative value to avoid DataLoader worker oversubscription warnings/freezes
     # on small VMs / notebooks. You can increase this on larger machines.
@@ -186,7 +186,7 @@ def main() -> None:
     # Why shuffle: each step sees a different mixture of images/patches.
     train_cfg = ImageFolderConfig(
         root=Path(args.train_root),
-        patch_size=int(args.patch_size),
+        patch_size=args.patch_size,
         to_ycbcr=True,
         seed=int(args.seed),
     )
@@ -202,12 +202,11 @@ def main() -> None:
         drop_last=True,
     )
 
-    # Optional validation dataset.
     val_loader: Optional[DataLoader] = None
     if args.val_root:
         val_cfg = ImageFolderConfig(
             root=Path(args.val_root),
-            patch_size=int(args.patch_size),
+            patch_size=args.patch_size,
             to_ycbcr=True,
             seed=int(args.seed) + 1,
         )

@@ -74,6 +74,10 @@ def _resize_pil_to_min_side(pil: Image.Image, min_side: int) -> Image.Image:
     - Our training pipeline takes random crops of size `patch_size`.
     - Resizing avoids crashing when an image is smaller than the crop.
     """
+    
+    if isinstance(min_side, (list, tuple)):
+        min_side = max(min_side)
+    
     w, h = pil.size
     if min(w, h) >= min_side:
         return pil
@@ -91,24 +95,27 @@ def _resize_pil_to_min_side(pil: Image.Image, min_side: int) -> Image.Image:
     return pil.resize((new_w, new_h), resample=resample)
 
 
-def _random_crop(x: torch.Tensor, patch_size: int, generator: Optional[torch.Generator]) -> torch.Tensor:
+def _random_crop(x: torch.Tensor, patch_size, generator: Optional[torch.Generator]) -> torch.Tensor:
     """
-    Uniform random crop of size (patch_size, patch_size) from a CHW tensor.
+    Uniform random crop of size (ph, pw) from a CHW tensor.
     """
+    if isinstance(patch_size, (list, tuple)):
+        ph, pw = patch_size[0], patch_size[1]
+    else:
+        ph, pw = patch_size, patch_size
+
     _, h, w = x.shape
-    if h < patch_size or w < patch_size:
+    if h < ph or w < pw:
         raise ValueError(f"Image too small for patch_size={patch_size}: got {h}x{w}")
 
     if generator is None:
-        top = int(torch.randint(0, h - patch_size + 1, (1,)).item())
-        left = int(torch.randint(0, w - patch_size + 1, (1,)).item())
+        top = int(torch.randint(0, h - ph + 1, (1,)).item())
+        left = int(torch.randint(0, w - pw + 1, (1,)).item())
     else:
-        top = int(torch.randint(0, h - patch_size + 1, (1,), generator=generator).item())
-        left = int(torch.randint(0, w - patch_size + 1, (1,), generator=generator).item())
+        top = int(torch.randint(0, h - ph + 1, (1,), generator=generator).item())
+        left = int(torch.randint(0, w - pw + 1, (1,), generator=generator).item())
 
-    return x[:, top:top + patch_size, left:left + patch_size]
-
-
+    return x[:, top:top + ph, left:left + pw]
 @dataclass(frozen=True)
 class ImageFolderConfig:
     """
@@ -137,10 +144,17 @@ class ImageFolderPatches(Dataset[torch.Tensor]):
 
     def __init__(self, cfg: ImageFolderConfig):
         super().__init__()
-        if cfg.patch_size % 16 != 0:
-            raise ValueError("patch_size must be divisible by 16 (codec latent stride)")
-        self.cfg = cfg
+        if isinstance(cfg.patch_size, (list, tuple)):
+            if cfg.patch_size[0] % 16 != 0 or cfg.patch_size[1] % 16 != 0:
+                raise ValueError(f"Both patch dimensions must be multiples of 16, got {cfg.patch_size}")
+        # Otherwise fall back to the standard integer check
+        else:
+            if cfg.patch_size % 16 != 0:
+                raise ValueError(f"patch_size must be a multiple of 16, got {cfg.patch_size}")
+                
+        self.cfg = cfg  # <--- Make sure this is on its own line, aligned with the 'if' statements!        self.root = Path(cfg.root)
         self.root = Path(cfg.root)
+        
         if not self.root.exists():
             raise FileNotFoundError(str(self.root))
 

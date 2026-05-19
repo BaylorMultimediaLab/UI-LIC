@@ -1,0 +1,48 @@
+{
+    "global_arguments": {
+        "dataset": "/Users/nicholasnolen/Desktop/Intro_to_Machine_Learning/Semester_Project/Training_and_Test_Data/Positive_Negative_Dataset",        
+        "cuda": false,
+        "gpu_id": 0,
+        "epochs": 1,
+        "learning_rate": 0.00067,
+        "batch_size": 16,
+        "test_batch_size": 1,
+        "patch_size": [128, 128],
+        "codestream_path": "experiments/interactive_run_01/codestream/150",
+        "train_dataset": "/Users/nicholasnolen/Desktop/Intro_to_Machine_Learning/Semester_Project/Training_and_Test_Data/Positive_Negative_Dataset/Positive",
+        "test_dataset": "/Users/nicholasnolen/Desktop/Intro_to_Machine_Learning/Semester_Project/Training_and_Test_Data/Positive_Negative_Dataset/Negative",
+        "train_split": "Positive",
+        "test_split": "Negative"
+    },
+    "tasks": {
+        "LIC-TCM": {
+            "env_path": "testing-training-env",
+            "task_name": "LIC-TCM",
+            "directory": "LIC-TCM",
+            "arguments": {
+                "epochs": 1,
+                "learning_rate": 0.00067,
+                "batch_size": 16,
+                "test_batch_size": 1,
+                "patch_size": [256, 256],
+                "cuda": false,
+                "save": true,
+                "save_path": "experiments/interactive_run_01/checkpoints/LIC-TCM",
+                "type": "mse",
+                "lambda": 0.01,
+                "lr_epoch": [45, 48],
+                "aux_learning_rate": 0.001,
+                "num_workers": 4
+            }
+        },
+        "ELIC": {
+            "env_path": "training-testing-env",
+            "task_name": "ELIC",
+            "directory": "ELIC",
+            "arguments": {
+                "experiment": "interactive_run_01",
+                "save": true
+            }
+        }
+    }
+}   

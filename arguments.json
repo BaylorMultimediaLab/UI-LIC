@@ -1,6 +1,5 @@
 {
     "global_arguments": {
-        "dataset": "/Users/nicholasnolen/Desktop/Intro_to_Machine_Learning/Semester_Project/Training_and_Test_Data/Positive_Negative_Dataset",        
         "cuda": false,
         "gpu_id": 0,
         "epochs": 1,
@@ -9,19 +8,22 @@
         "test_batch_size": 1,
         "patch_size": [256, 256],
         "codestream_path": "experiments/interactive_run_01/codestream/150",
-        "train_dataset": "/Users/nicholasnolen/Desktop/Intro_to_Machine_Learning/Semester_Project/Training_and_Test_Data/Positive_Negative_Dataset/Positive",
-        "test_dataset": "/Users/nicholasnolen/Desktop/Intro_to_Machine_Learning/Semester_Project/Training_and_Test_Data/Positive_Negative_Dataset/Negative",
+        "train_dataset": "data/val2017",
+        "test_dataset": "data/kodak",
         "train_split": "Positive",
         "test_split": "Negative"
     },
     "tasks": {
         "StableCodec": {
-            "env_path": "training-testing-env",
+            "env_path": "~/training-testing-env",
             "task_name": "StableCodec",
             "directory": "StableCodec",
             "arguments": {
                 "experiment": "interactive_run_01",
-                "save": true
+                "save": true,
+                "sd_path": "", 
+                "elic_path": "", 
+                "lambda_rate": ""
             }
         },
         "LIC-HPCM": {

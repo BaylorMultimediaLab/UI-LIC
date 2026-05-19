@@ -13,7 +13,7 @@ class StableCodecTrainInterface(BaseInterface):
     
     
     # Enforce these to avoid accidental default overwrites
-    REQUIRED_ARGS = ["train_dataset", "test_dataset"]
+    REQUIRED_ARGS = ["train_dataset", "test_dataset", "sd_path", "elic_path", "lambda_rate" ]
     
     
     
@@ -23,8 +23,7 @@ class StableCodecTrainInterface(BaseInterface):
         "enable_xformers_memory_efficient_attention", 
         "gradient_checkpointing", 
         "allow_tf32", 
-        "set_grads_to_none", 
-        "save_val"
+        "set_grads_to_none"
     ]
 
     # Derived from the explicit argparse usage inside the provided StableCodec training script

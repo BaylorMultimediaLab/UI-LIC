@@ -113,17 +113,17 @@ class Dispatcher:
             
             clean_job_args = self._normalize_booleans(job_args)
 
-            # 4. Instantiate the Interface
             # We pass the entire global pool. The interface's ALIASES will safely extract only what it needs.
             InterfaceClass = self.registry[target_task_name]
             interface_instance = InterfaceClass(job_args=clean_job_args, global_args=clean_global_args)            
             
             # Override the Interface's default directory if one was provided in the JSON
             if custom_dir:
-                interface_instance.WORKING_DIR = custom_dir
-                
+                clean_custom_dir = os.path.abspath(os.path.expanduser(custom_dir))
+                interface_instance.WORKING_DIR = clean_custom_dir                 
             if env_path:
-                interface_instance.ENV_PATH = env_path
+                clean_env_path = os.path.abspath(os.path.expanduser(env_path))
+                interface_instance.ENV_PATH = clean_env_path
                 
             is_valid, missing_args = interface_instance.validate()
             

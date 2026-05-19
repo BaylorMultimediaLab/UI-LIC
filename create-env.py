@@ -4,26 +4,30 @@ import sys
 
 def setup_conda_env(env_path: str, requirements_file: str, python_version: str = "3.10"):
     """
-    Dynamically creates a Conda environment and installs requirements.
+    Dynamically creates a Conda environment and installs requirements in an Ubuntu/Linux shell.
     """
-    # Verify the requirements file exists before starting
+    # Expand tildes (~) if the user references their Linux home directory
+    env_path = os.path.abspath(os.path.expanduser(env_path))
+    requirements_file = os.path.abspath(os.path.expanduser(requirements_file))
+
     if not os.path.exists(requirements_file):
         print(f"Error: Could not find '{requirements_file}'")
         sys.exit(1)
 
     print(f"Creating Conda environment at: {env_path} (Python {python_version})")
     
-    # Command to create the environment
+    # Explicitly include pip to keep it isolated to this environment prefix
     create_cmd = [
         "conda", "create",
         "--prefix", env_path,
         f"python={python_version}",
-        "-y" # Automatically say yes to prompts
+        "pip", 
+        "-y"
     ]
 
     try:
-        # Run the creation command
-        subprocess.run(create_cmd, check=True)
+        print("Running environment creation...")
+        subprocess.run(create_cmd, check=True) # Clean execution, no shell=True needed on Linux
         print("Environment created successfully.")
 
         print(f"Installing remaining dependencies from {requirements_file}...")
@@ -33,7 +37,6 @@ def setup_conda_env(env_path: str, requirements_file: str, python_version: str =
             "pip", "install", "-r", requirements_file
         ]
         
-        # Run the installation command
         subprocess.run(install_cmd, check=True)
         print("Dependencies installed successfully!")
 
@@ -42,35 +45,31 @@ def setup_conda_env(env_path: str, requirements_file: str, python_version: str =
         print(f"Command run: {' '.join(e.cmd)}")
         sys.exit(1)
     except FileNotFoundError:
-        print("\n[!] Conda is not recognized as a command. Ensure it is installed and in your system PATH.")
+        print("\n[!] Conda is not recognized as a command.")
+        print("Make sure Conda is initialized in your Ubuntu shell (run 'conda init bash' and restart the shell if needed).")
         sys.exit(1)
 
-if __name__ == "__main__":
-    print("--- Environment Setup Configuration ---")
-    print("(Press Enter on an empty line at an env or requirements prompt to cancel and exit)")
-    print("-" * 40)
-    
-    # 1. Get Environment Path
+if __name__ == "__main__":    
     TARGET_ENV_PATH = input("Enter target environment path: ").strip()
     if not TARGET_ENV_PATH:
         print("\n[CANCELLED] No environment path provided. Exiting script.")
         sys.exit(0)
         
-    # 2. Get Requirements Path
+    # Get Requirements Path
     REQUIREMENTS_PATH = input("Enter requirements file path: ").strip()
     if not REQUIREMENTS_PATH:
         print("\n[CANCELLED] No requirements path provided. Exiting script.")
         sys.exit(0)
         
-    # 3. Get Python Version (Optional, defaults to 3.10)
+    # Get Python Version
     PYTHON_VERSION = input("Enter Python version [Default: 3.10]: ").strip()
     if not PYTHON_VERSION:
         PYTHON_VERSION = "3.10"
         
-    print("-" * 40)
+    print("-" * 50)
     print(f"Using Environment Path: {TARGET_ENV_PATH}")
     print(f"Using Requirements Path: {REQUIREMENTS_PATH}")
     print(f"Using Python Version:    {PYTHON_VERSION}")
-    print("-" * 40)
+    print("-" * 50)
                 
     setup_conda_env(TARGET_ENV_PATH, REQUIREMENTS_PATH, PYTHON_VERSION)

@@ -5,3 +5,4 @@ tqdm
 bd-metric
 pillow
 pybind11
+torch

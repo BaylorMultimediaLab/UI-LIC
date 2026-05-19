@@ -9,7 +9,8 @@ testing-training-enviornment
 
 data
 
-LIC-TCM/testing-training-env
+testing-training-env
+training-testing-env
 
 # Distribution / packaging
 .Python

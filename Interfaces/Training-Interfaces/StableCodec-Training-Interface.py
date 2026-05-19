@@ -26,11 +26,14 @@ class StableCodecTrainInterface(BaseInterface):
         "set_grads_to_none"
     ]
 
+
+    ## USING MIXED PRECISION BF16 rather than no
+
     # Derived from the explicit argparse usage inside the provided StableCodec training script
     DEFAULT_VARS = {
         "sd_path": None,
         "gradient_accumulation_steps": 1,
-        "mixed_precision": "no",
+        "mixed_precision": "bf16",
         "report_to": "tensorboard",
         "seed": 100,
         "train_dataset": None,
@@ -70,6 +73,8 @@ class StableCodecTrainInterface(BaseInterface):
     # Map the internal configuration standard names to the argparse CLI flags
     CLI_MAPPING = {
         "sd_path": "--sd_path",
+        "elic_path":  "--elic_path",  
+        "lambda_rate": "--lambda_rate",
         "gradient_accumulation_steps": "--gradient_accumulation_steps",
         "mixed_precision": "--mixed_precision",
         "report_to": "--report_to",

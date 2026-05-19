@@ -50,37 +50,40 @@ The following models are integrated into the platform, each with a specialized i
 
 ### **StableCodec**
 *Taming One-Step Diffusion for Extreme Image Compression (ICCV 2025)*
-- **Recommended Python:** 3.10
+- **Recommended Python Version:** 3.10
 - **Core Concept:** Uses a one-step diffusion process (SD-Turbo) combined with a dual-branch coding structure.
 - **Strength:** Exceptional visual realism at ultra-low bitrates (as low as 0.005 bpp) by leveraging generative priors.
 - **Workflow:** Typically involves a base training stage followed by GAN-based finetuning.
+- **Additional Files:** Requires installation of stable diffusion turbo https://huggingface.co/stabilityai/sd-turbo.
 
 ### **ELIC**
 *Efficient Learned Image Compression with Context-Adaptive Masked Modeling*
-- **Recommended Python:** 3.10
+- **Recommended Python Version:** 3.10
 - **Core Concept:** A high-performance model utilizing unevenly masked modeling and spatial-channel context.
 - **Strength:** Highly efficient coding with state-of-the-art Rate-Distortion performance, balancing complexity and compression.
 
 ### **DCVC-RT**
 *Deep Contextual Video Compression - Real Time*
-- **Recommended Python:** 3.12
+- **Recommended Python Version:** 3.12
 - **Core Concept:** Optimized for low-latency and real-time performance.
 - **Strength:** Excellent for scenarios requiring fast inference and high-quality I-frame (Intra) compression as a foundation for video tasks.
 
 ### **LIC-TCM**
 *Learned Image Compression with Mixed Transformer-CNN Architectures*
-- **Recommended Python:** 3.10
+- **Recommended Python Version:** 3.10
 - **Core Concept:** Employs Transformers to capture long-range dependencies in the latent space.
 - **Strength:** Superior context modeling compared to traditional CNN-based approaches, leading to better compression of complex textures.
 
 ### **LIC-HPCM**
 *Learned Image Compression with Hierarchical Progressive Context Modeling*
-- **Recommended Python:** 3.8
+- **Recommended Python Version:** 3.8
 - **Core Concept:** Combines different context modeling strategies to maximize parallelization during decoding.
 - **Strength:** Optimized for hardware acceleration and fast decoding without sacrificing significant compression efficiency.
+- **Required Actions:** Compile LIC-HPCM/src/entropy_models/entropy_coders/unbounded_rans through ./setup.sh
+  Compile LIC-HPCM/src/entropy_models through python setup.py build_ext --inplace
 
 ### **JPEG-AI**
-- **Recommended Python:** 3.10
+- **Recommended Python Version:** 3.8
 - **Core Concept:** The standardized approach for the next generation of AI-based image coding.
 - **Strength:** Focused on interoperability and rigorous testing across a wide range of content and bitrates, following the JPEG-AI Common Test Conditions (CTC).
 

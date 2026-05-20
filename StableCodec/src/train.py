@@ -46,10 +46,11 @@ def main(args):
     if args.seed is not None:
         set_seed(args.seed)
 
-    train_dataset = H5Dataset(
+    train_dataset = ImageFolder(
         args.train_dataset,
+        split="train", # from Kodak
         transform=transforms.Compose([
-            transforms.ToPILImage(),
+            # transforms.ToPILImage(), IMAGE FOLDER ALREADY HANDLES THIS
             transforms.RandomCrop((args.train_patch_size, args.train_patch_size)),
             transforms.RandomHorizontalFlip(),
             transforms.RandomVerticalFlip(),

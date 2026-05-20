@@ -34,6 +34,7 @@ def main(args):
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
         log_with=args.report_to,
+        project_dir=args.output_dir,
     )
 
     if accelerator.is_local_main_process:
@@ -45,10 +46,11 @@ def main(args):
     if args.seed is not None:
         set_seed(args.seed)
 
-    train_dataset = H5Dataset(
+    train_dataset = ImageFolder(
         args.train_dataset,
+        split="train", # from Kodak
         transform=transforms.Compose([
-            transforms.ToPILImage(),
+            # transforms.ToPILImage(), IMAGE FOLDER ALREADY HANDLES THIS
             transforms.RandomCrop((args.train_patch_size, args.train_patch_size)),
             transforms.RandomHorizontalFlip(),
             transforms.RandomVerticalFlip(),
@@ -58,9 +60,8 @@ def main(args):
     )
     test_dataset = ImageFolder(
         args.test_dataset,
-        split="kodak-images", # from Kodak
+        split="kodak", # from Kodak
         transform=transforms.Compose([
-#            transforms.CenterCrop((args.train_patch_size, args.train_patch_size)), # <-- Added this line
             transforms.ToTensor(),
             transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
         ])

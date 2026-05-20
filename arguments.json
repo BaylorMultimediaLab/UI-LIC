@@ -1,0 +1,33 @@
+{
+    "global_arguments": {
+        "cuda": false,
+        "gpu_id": 0,
+        "epochs": 1,
+        "learning_rate": 0.00067,
+        "batch_size": 16,
+        "test_batch_size": 1,
+        "patch_size": [256, 256],
+        "codestream_path": "experiments/interactive_run_01/codestream/150",
+        "train_dataset": "/mnt/c/Users/Nicholas_Nolen1/data/val2017",
+        "test_dataset": "/mnt/c/Users/Nicholas_Nolen1/data/kodak",
+        "train_split": "Positive",
+        "test_split": "Negative"
+    },
+    "tasks": {
+        "JPEG-AI": {
+            "env_path": "~/JPEG-AI-training-testing-env",
+            "task_name": "JPEG-AI",
+            "directory": "JPEG-AI",
+            "arguments": {
+                "experiment": "interactive_run_01",
+                "save": true,
+                "val_data_dir": "/mnt/c/Users/Nicholas_Nolen1/data/test", 
+                "train_url": "experiments/interactive_run_01/output",
+                "data_dir": "/mnt/c/Users/Nicholas_Nolen1/data/JPEG-AI-Images/val2017-crops-random",
+                "lst": "/home/nicholas/data/jpeg_ai_data/JPEG-AI-Images/val2017_short_cropped_list.txt",
+                "val_data_dir": "/mnt/c/Users/Nicholas_Nolen1/data/JPEG-AI-Images/val2017-crops-random",
+                "val_lst": "/home/nicholas/data/jpeg_ai_data/JPEG-AI-Images/val2017_short_cropped_list.txt"
+            }
+        }
+    }
+}

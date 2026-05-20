@@ -9,6 +9,11 @@ testing-training-enviornment
 
 data
 
+testing-training-env
+training-testing-env
+
+arguments.json
+
 # Distribution / packaging
 .Python
 build/

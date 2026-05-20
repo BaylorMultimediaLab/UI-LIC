@@ -15,13 +15,13 @@ def train_options():
     parser.add_argument(
         "--train-split",
         type=str, 
-        default="train256_0", 
+        default="", # <--- default to empty string so can pass complete directory
         help="Name of the training subfolder"
     )
     parser.add_argument(
         "--test-split", 
         type=str, 
-        default="kodak", 
+        default="", # <--- default to empty string so can pass complete directory
         help="Name of the validation/testing subfolder"
     )
     parser.add_argument(

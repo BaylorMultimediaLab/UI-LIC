@@ -19,8 +19,8 @@ class ELICTrainInterface(BaseInterface):
     DEFAULT_VARS = {
         "experiment": "0483mse",
         "dataset": "/mnt/c/Users/Nicholas_Nolen1/data", 
-        "train_split": "train256_0",  # Default subfolder
-        "test_split": "kodak",        # Default subfolder        
+        "train_split": "",  # Default subfolder
+        "test_split": "",        # Default subfolder        
         "epochs": 60000,
         "learning_rate": 1e-4,
         "num_workers": 8,

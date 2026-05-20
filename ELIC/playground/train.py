@@ -75,13 +75,20 @@ def main():
 
     # get names from args
     
-    train_split_name = getattr(args, 'train_split', 'train256_0')
-    test_split_name = getattr(args, 'test_split', 'kodak')
+    # 1. Extract splits (default to empty string instead of hardcoded 'train256_0')
+    train_split_name = getattr(args, 'train_split', '')
+    test_split_name = getattr(args, 'test_split', '')
     
-    train_dataset = ImageFolder(args.dataset, split=train_split_name, transform=train_transforms)
-    test_dataset = ImageFolder(args.dataset, split=test_split_name, transform=test_transforms)
+    # 2. Build the exact paths manually. 
+    # If a split is provided, append it. If not, just use the direct dataset path.
+    train_path = os.path.join(args.dataset, train_split_name) if train_split_name else args.dataset
+    test_path = os.path.join(args.dataset, test_split_name) if test_split_name else args.dataset
+    
+    # 3. Pass split="" so ImageFolder reads directly from the exact paths we just built
+    train_dataset = ImageFolder(train_path, split="", transform=train_transforms)
+    test_dataset = ImageFolder(test_path, split="", transform=test_transforms)
 
-
+    # Dataloaders remain exactly the same
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
@@ -97,6 +104,7 @@ def main():
         shuffle=False,
         pin_memory=(device == "cuda"),
     )
+    
     print(f"DEBUG: Found {len(train_dataset)} training images.")
     print(f"DEBUG: Found {len(test_dataset)} validation images.")
     if len(test_dataset) == 0:

@@ -48,7 +48,9 @@ class ELICTrainInterface(BaseInterface):
         "lambda": "lmbda",
         "bs": "batch_size",
         "c": "checkpoint",
-        "gpu": "gpu_id"
+        "gpu": "gpu_id",
+        "train_dataset": "dataset",
+        "output_directory": "experiment"
     }
 
     # Map the standard names to the CLI flags

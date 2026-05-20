@@ -68,6 +68,7 @@ class StableCodecTrainInterface(BaseInterface):
         "num_workers": "dataloader_num_workers",
         "save_path": "output_dir",
         "epochs": "max_train_steps"  # Note: Script uses steps instead of epochs
+        "lambda": "lambda_rate"
     }
 
     # Map the internal configuration standard names to the argparse CLI flags

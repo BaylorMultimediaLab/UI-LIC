@@ -1,32 +1,56 @@
 {
     "global_arguments": {
-        "cuda": false,
+        "cuda": true,
         "gpu_id": 0,
-        "epochs": 1,
-        "learning_rate": 0.00067,
+        "num_workers": 8,
+        "seed": 42,
+        "train_dataset": "/mnt/c/Users/Nicholas_Nolen1/data/train",
+        "test_dataset": "/mnt/c/Users/Nicholas_Nolen1/data/test",
+        "train_split": "",
+        "test_split": "",
+        "epochs": 100,
         "batch_size": 16,
         "test_batch_size": 1,
-        "patch_size": [256, 256],
-        "codestream_path": "experiments/interactive_run_01/codestream/150",
-        "train_dataset": "/mnt/c/Users/Nicholas_Nolen1/data/val2017",
-        "test_dataset": "/mnt/c/Users/Nicholas_Nolen1/data/kodak",
-        "train_split": "Positive",
-        "test_split": "Negative"
+        "patch_size": [
+            256,
+            256
+        ],
+        "learning_rate": 0.0001,
+        "aux_learning_rate": 0.001,
+        "clip_max_norm": 1.0,
+        "lambda": 0.01,
+        "metrics": "mse",
+        "output_directory": "default_run",
+        "save": true
     },
     "tasks": {
-        "JPEG-AI": {
-            "env_path": "~/JPEG-AI-training-testing-env",
-            "task_name": "JPEG-AI",
-            "directory": "JPEG-AI",
+        "ELIC": {
+            "env_path": "~/ELIC-env",
+            "task_name": "ELIC",
+            "directory": "ELIC",
             "arguments": {
-                "experiment": "interactive_run_01",
+                "experiment": "default_run",
+                "dataset": "/mnt/c/Users/Nicholas_Nolen1/data/train",
+                "train_split": "train256_0",
+                "test_split": "kodak",
+                "epochs": 60000,
+                "learning_rate": 0.0001,
+                "num_workers": 8,
+                "lmbda": 0.0483,
+                "metrics": "mse",
+                "batch_size": 8,
+                "test_batch_size": 1,
+                "aux_learning_rate": 0.001,
+                "patch_size": [
+                    128,
+                    128
+                ],
+                "gpu_id": 0,
+                "cuda": true,
                 "save": true,
-                "val_data_dir": "/mnt/c/Users/Nicholas_Nolen1/data/test", 
-                "train_url": "experiments/interactive_run_01/output",
-                "data_dir": "/mnt/c/Users/Nicholas_Nolen1/data/JPEG-AI-Images/val2017-crops-random",
-                "lst": "/home/nicholas/data/jpeg_ai_data/JPEG-AI-Images/val2017_short_cropped_list.txt",
-                "val_data_dir": "/mnt/c/Users/Nicholas_Nolen1/data/JPEG-AI-Images/val2017-crops-random",
-                "val_lst": "/home/nicholas/data/jpeg_ai_data/JPEG-AI-Images/val2017_short_cropped_list.txt"
+                "seed": 192.1,
+                "clip_max_norm": 1.0,
+                "checkpoint": null
             }
         }
     }

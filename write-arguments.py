@@ -74,8 +74,27 @@ class ConfigGenerator:
             
         return val # Default to string
 
-    def _prompt(self, message, default=None, required=False):
-        """Helper to prompt the user for input."""
+    def _get_known_arg(self, arg, aliases):
+        """Checks if a value for 'arg' or any of its aliases exists in memory."""
+        # Direct match (e.g., 'dataset' is in global args)
+        if arg in self.known_args:
+            return self.known_args[arg]
+            
+        # Forward Lookup
+        if arg in aliases:
+            target = aliases[arg]
+            if target in self.known_args:
+                return self.known_args[target]
+                
+        # Reverse Lookup
+        for alias_key, target in aliases.items():
+            if target == arg:
+                if alias_key in self.known_args:
+                    return self.known_args[alias_key]                    
+        return None
+
+    def _prompt(self, message, default=None, required=False, is_path=False):
+        """Helper to prompt the user for input, with optional path validation."""
         while True:
             prompt_str = f"{message} "
             if default is not None:
@@ -86,41 +105,81 @@ class ConfigGenerator:
                 
             user_input = input(prompt_str)
             
+            # Handle empty inputs
             if not user_input.strip():
                 if default is not None:
-                    return default
-                if required:
-                    print("  -> This argument is required. Please provide a value.")
+                    val = default
+                elif required:
+                    print("  -> [ERROR] This argument is required. Please provide a value.")
                     continue
-                return None
-            
-            return self._parse_type(user_input)
+                else:
+                    return None
+            else:
+                val = self._parse_type(user_input)
+
+            # Handle path auto-resolution and validation safely
+            if is_path and val is not None:
+                expanded_path = os.path.abspath(os.path.expanduser(str(val)))
+                
+                if not os.path.exists(expanded_path):
+                    print(f"  -> [WARNING] Path does not exist currently: '{expanded_path}'")
+                    force = input("  -> Do you want to use this path anyway? (y/N): ").strip().lower()
+                    if force != 'y':
+                        continue
+                        
+                val = expanded_path  # Save the clean, absolute path
+                
+            return val
 
     def build_global_args(self):
         print("\n" + "="*50)
-        print("🔧 Configuring Global Arguments")
+        print("Configuring Global Arguments")
         print("="*50)
         
         global_args = {}
         
-        # Standard global arguments template
+        # Standard global arguments template with validation rules
         prompts = {
-            "cuda": False,
-            "gpu_id": 0,
-            "epochs": 1,
-            "learning_rate": 0.00067,
-            "batch_size": 16,
-            "test_batch_size": 1,
-            "patch_size": "[256, 256]",
-            "codestream_path": "",
-            "train_dataset": "",
-            "test_dataset": "",
-            "train_split": "Positive",
-            "test_split": "Negative"
+            # --- Hardware & Environment ---
+            "cuda": {"default": True},
+            "gpu_id": {"default": 0},
+            "num_workers": {"default": 8},
+            "seed": {"default": 42},
+            
+            # --- Datasets ---
+            "train_dataset": {"default": None, "required": True, "is_path": True},
+            "test_dataset": {"default": None, "required": True, "is_path": True},
+            "train_split": {"default": ""},
+            "test_split": {"default": ""},
+            
+            # --- Batching & Steps ---
+            "epochs": {"default": 100},
+            "batch_size": {"default": 16},
+            "test_batch_size": {"default": 1},
+            "patch_size": {"default": [256, 256]}, # Use actual list here!
+            
+            # --- Optimization ---
+            "learning_rate": {"default": 1e-4},
+            "aux_learning_rate": {"default": 1e-3},
+            "clip_max_norm": {"default": 1.0},
+            
+            # --- Model Parameters ---
+            "lambda": {"default": 0.01},
+            "metrics": {"default": "mse"},
+            
+            # --- Logging & Checkpointing ---
+            "output_directory": {"default": "default_run"},
+            "save": {"default": True},
+            "checkpoint": {"default": None, "is_path": True}
         }
         
-        for key, default_val in prompts.items():
-            val = self._prompt(f"Enter {key}", default=default_val)
+        for key, opts in prompts.items():
+            default_val = opts.get("default")
+            is_req = opts.get("required", False)
+            is_path = opts.get("is_path", False)
+            
+            val = self._prompt(f"Enter {key}", default=default_val, required=is_req, is_path=is_path)
+            
             if val is not None:
                 global_args[key] = val
                 self.known_args[key] = val  # Save to memory
@@ -129,27 +188,37 @@ class ConfigGenerator:
 
     def build_tasks(self):
         print("\n" + "="*50)
-        print("🚀 Configuring Tasks")
+        print("Configuring Tasks")
         print("="*50)
         
         if not self.registry:
             print("No interfaces found! Please ensure your interface directories are correct.")
             return {}
             
-        print("Available Interfaces:")
-        for task_name in self.registry.keys():
-            print(f" - {task_name}")
-            
         tasks = {}
         
         while True:
+            # --- Status Dashboard ---
+            print("\n" + "-"*45)
+            print("AVAILABLE INTERFACES (Can be added):")
+            for name in self.registry.keys():
+                print(f"  [+] {name}")
+                
+            print("\nCURRENT JOB QUEUE (Already added):")
+            if not tasks:
+                print("  (Empty)")
+            else:
+                for t_key in tasks.keys():
+                    print(f"  [*] {t_key}")
+            print("-"*45)
+            
             task_name = input("\nEnter the Task Name to add (or press Enter to finish): ").strip()
             
             if not task_name:
                 break
                 
             if task_name not in self.registry:
-                print(f"Unknown task type: '{task_name}'. Try again.")
+                print(f"  -> [ERROR] Unknown task type: '{task_name}'. Try again.")
                 continue
                 
             task_key = task_name
@@ -160,8 +229,8 @@ class ConfigGenerator:
             print(f"\n--- Configuring Task: {task_key} ---")
             
             # 1. Base Task Information
-            env_path = self._prompt("Enter env_path", default=f"~/{task_name}-env")
             directory = self._prompt("Enter directory", default=task_name)
+            env_path = self._prompt("Enter env_path", default=f"~/{directory}-env")
             
             task_info = {
                 "env_path": env_path,
@@ -172,14 +241,14 @@ class ConfigGenerator:
             
             interface_cls = self.registry[task_name]
             required_args = getattr(interface_cls, 'REQUIRED_ARGS', [])
-            default_args = getattr(interface_cls, 'DEFAULT_VARS', {}) 
+            default_args = getattr(interface_cls, 'DEFAULT_VARS', {})
+            aliases = getattr(interface_cls, 'ALIASES', {})  # Pull aliases for checking
             
             # 2. Required Arguments
             if required_args:
                 print("\n[Required Arguments]")
                 for arg in required_args:
-                    # Check if we already know this value from global args or previous tasks
-                    prev_val = self.known_args.get(arg)
+                    prev_val = self._get_known_arg(arg, aliases)
                     
                     if prev_val is not None:
                         val = self._prompt(f"{arg}", default=prev_val)
@@ -194,30 +263,30 @@ class ConfigGenerator:
                 print(f"\n[Default Arguments] This interface has {len(default_args)} default arguments.")
                 override = input("Do you want to override any default arguments? (y/N): ").strip().lower()
                 
-                # Pre-fill with defaults
+                # BUG FIX: Pre-fill with defaults ONLY if not already answered in required_args
                 for arg, default_val in default_args.items():
-                    task_info["arguments"][arg] = default_val
-                    
+                    if arg not in required_args:
+                        task_info["arguments"][arg] = default_val
+                        
                 if override == 'y':
                     for arg, default_val in default_args.items():
-                        # Skip if it was handled in required args
                         if arg in required_args:
                             continue 
                         
-                        # Prioritize previously entered values over interface defaults if they exist
-                        suggested_default = self.known_args.get(arg, default_val)
+                        suggested_default = self._get_known_arg(arg, aliases)
+                        if suggested_default is None:
+                            suggested_default = default_val
                         
                         val = self._prompt(f"{arg}", default=suggested_default)
                         task_info["arguments"][arg] = val
                         self.known_args[arg] = val  # Save to memory
                 else:
-                    # If user skips override, we still might want to add these to memory
                     for arg, default_val in default_args.items():
                         if arg not in self.known_args:
                             self.known_args[arg] = default_val
 
             tasks[task_key] = task_info
-            print(f"✅ Added {task_key} to job queue.")
+            print(f"\nSuccessfully added {task_key} to job queue.")
             
         return tasks
 
@@ -234,7 +303,7 @@ class ConfigGenerator:
             json.dump(final_config, f, indent=4)
             
         print("\n" + "="*50)
-        print(f"🎉 Successfully generated {output_path}")
+        print(f"Successfully generated {output_path}")
         print("="*50)
 
 

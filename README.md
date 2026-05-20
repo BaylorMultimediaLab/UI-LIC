@@ -81,6 +81,7 @@ The following models are integrated into the platform, each with a specialized i
 - **Strength:** Optimized for hardware acceleration and fast decoding without sacrificing significant compression efficiency.
 - **Required Actions:** Compile LIC-HPCM/src/entropy_models/entropy_coders/unbounded_rans through ./setup.sh
   Compile LIC-HPCM/src/entropy_models through python setup.py build_ext --inplace
+- **Implementation Decisions:** Choose between two models [HPCM_Base/HPCM_Large]
 
 ### **JPEG-AI**
 - **Recommended Python Version:** 3.8

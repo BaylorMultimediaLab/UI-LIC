@@ -93,6 +93,26 @@ class ConfigGenerator:
                     return self.known_args[alias_key]                    
         return None
 
+    def _matches_global(self, arg, val, global_args, aliases):
+        """Checks if a task argument value is identical to the global argument value."""
+        # Direct match
+        if arg in global_args and global_args[arg] == val:
+            return True
+            
+        # Forward lookup
+        if arg in aliases:
+            target = aliases[arg]
+            if target in global_args and global_args[target] == val:
+                return True
+                
+        # Reverse lookup
+        for alias_key, target in aliases.items():
+            if target == arg:
+                if alias_key in global_args and global_args[alias_key] == val:
+                    return True
+                    
+        return False
+
     def _prompt(self, message, default=None, required=False, is_path=False):
         """Helper to prompt the user for input, with optional path validation."""
         while True:
@@ -186,7 +206,7 @@ class ConfigGenerator:
                 
         return global_args
 
-    def build_tasks(self):
+    def build_tasks(self, global_args, omit_globals=False):
         print("\n" + "="*50)
         print("Configuring Tasks")
         print("="*50)
@@ -258,32 +278,50 @@ class ConfigGenerator:
                     task_info["arguments"][arg] = val
                     self.known_args[arg] = val  # Save to memory
             
-            # 3. Optional / Default Arguments
+            # Optional / Default Arguments
             if default_args:
                 print(f"\n[Default Arguments] This interface has {len(default_args)} default arguments.")
-                override = input("Do you want to override any default arguments? (y/N): ").strip().lower()
+                print("Note: Global arguments take precedence over interface defaults automatically.")
                 
-                # BUG FIX: Pre-fill with defaults ONLY if not already answered in required_args
+                # Pre-fill with defaults, BUT respect globals/known_args automatically!
                 for arg, default_val in default_args.items():
                     if arg not in required_args:
-                        task_info["arguments"][arg] = default_val
-                        
+                        global_val = self._get_known_arg(arg, aliases)
+                        if global_val is not None:
+                            task_info["arguments"][arg] = global_val
+                        else:
+                            task_info["arguments"][arg] = default_val
+
+                override = input("Do you want to override any default arguments manually? (y/N): ").strip().lower()
+                
                 if override == 'y':
                     for arg, default_val in default_args.items():
                         if arg in required_args:
                             continue 
                         
-                        suggested_default = self._get_known_arg(arg, aliases)
-                        if suggested_default is None:
-                            suggested_default = default_val
+                        # The suggested default is whatever we just pre-filled it with
+                        suggested_default = task_info["arguments"][arg]
                         
                         val = self._prompt(f"{arg}", default=suggested_default)
                         task_info["arguments"][arg] = val
                         self.known_args[arg] = val  # Save to memory
                 else:
-                    for arg, default_val in default_args.items():
+                    print("  -> Global arguments will be applied, and any defaults with no global args will be applied.")
+                    for arg in task_info["arguments"]:
                         if arg not in self.known_args:
-                            self.known_args[arg] = default_val
+                            self.known_args[arg] = task_info["arguments"][arg]
+
+            # --- Apply Space-Saving Optimization ---
+            if omit_globals:
+                keys_to_remove = []
+                for arg, val in task_info["arguments"].items():
+                    if self._matches_global(arg, val, global_args, aliases):
+                        keys_to_remove.append(arg)
+                
+                if keys_to_remove:
+                    print(f"  -> Omitting {len(keys_to_remove)} redundant arguments from {task_key} to save space.")
+                    for k in keys_to_remove:
+                        del task_info["arguments"][k]
 
             tasks[task_key] = task_info
             print(f"\nSuccessfully added {task_key} to job queue.")
@@ -292,7 +330,16 @@ class ConfigGenerator:
 
     def generate(self, output_path="arguments.json"):
         global_args = self.build_global_args()
-        tasks = self.build_tasks()
+        
+        print("\n" + "="*50)
+        print("JSON Optimization")
+        print("="*50)
+        print("You can automatically omit task arguments from the JSON if they are")
+        print("identical to the global arguments. This keeps the JSON file much")
+        print("smaller and makes it obvious which settings are overriding defaults.")
+        omit_globals = input("Do you want to omit matching arguments from tasks? (y/N): ").strip().lower() == 'y'
+        
+        tasks = self.build_tasks(global_args, omit_globals)
         
         final_config = {
             "global_arguments": global_args,

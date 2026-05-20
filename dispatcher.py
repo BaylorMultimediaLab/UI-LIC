@@ -70,7 +70,18 @@ class Dispatcher:
             else:
                 normalized[k] = v
         return normalized
-
+    
+    def _expand_paths(self, args_dict):
+        """Helper to recursively scan and expand any '~' home directory paths in string values."""
+        expanded = {}
+        for k, v in args_dict.items():
+            if isinstance(v, str) and v.startswith("~/"):
+                expanded[k] = os.path.expanduser(v)
+            elif isinstance(v, dict):
+                expanded[k] = self._expand_paths(v)
+            else:
+                expanded[k] = v
+        return expanded
     
     def run(self):
         # Load arguments from JSON
@@ -92,6 +103,7 @@ class Dispatcher:
             return
         
         clean_global_args = self._normalize_booleans(global_args)
+        clean_global_args = self._expand_paths(clean_global_args)  # <--- Clean path pass
 
 
         for step, (task_key, task_info) in enumerate(tasks.items(), start=1):
@@ -112,6 +124,7 @@ class Dispatcher:
                 continue
             
             clean_job_args = self._normalize_booleans(job_args)
+            clean_job_args = self._expand_paths(clean_job_args)  # <--- Clean path pass
 
             # We pass the entire global pool. The interface's ALIASES will safely extract only what it needs.
             InterfaceClass = self.registry[target_task_name]

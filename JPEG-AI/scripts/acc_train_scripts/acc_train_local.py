@@ -183,9 +183,6 @@ def run_stages_for_one_beta(beta, args, beta_2_gpus, train_cfg):
             num_gpus = len(assigned_gpus.split(','))
         
 
-        #HARDCODED FIX:
-        num_gpus = 1
-
         # DDP setup
         distributed_launch_cmd = [
             sys.executable,
@@ -415,7 +412,14 @@ def main(args=None):
         os.makedirs(f'{args.train_url}', exist_ok=True)
 
         bdrate_reporter = BDRateReporter(train_url)
-        num_workers = 4
+
+
+        # changed from (4) to dynamic count:
+        # If you have 4 GPUs assigned in your config, it uses 4 workers.
+        # If you have 1 GPU, it uses 1 worker (serial).
+        num_workers = len(set(beta_2_gpus.values()))
+
+        
         with tempfile.TemporaryDirectory() as train_output_dir:
             # copy files from previous training dir
             if args.copy_to_train_url_dir:

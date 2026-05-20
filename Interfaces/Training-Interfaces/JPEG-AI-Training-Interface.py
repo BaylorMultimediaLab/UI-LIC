@@ -1,9 +1,9 @@
 from base_interface import BaseInterface
-
 import os
 import glob
 import subprocess
-
+import tempfile
+import atexit
 
 class JPEG_AI_TrainInterface(BaseInterface):
 
@@ -29,7 +29,6 @@ class JPEG_AI_TrainInterface(BaseInterface):
         "copy_to_train_url_dir"
     ]
 
-    # Mirrored defaults extracted directly from common_parameters constructions
     DEFAULT_VARS = {
         "data_dir": None,
         "lst": "",
@@ -71,7 +70,6 @@ class JPEG_AI_TrainInterface(BaseInterface):
         "copy_to_train_url_dir": None
     }
 
-    # Short flag conversions matching the common parameters architecture
     ALIASES = {
         "d": "data_dir",
         "vd": "val_data_dir",
@@ -86,7 +84,6 @@ class JPEG_AI_TrainInterface(BaseInterface):
         "output_directory" : "train_url"
     }
 
-    # Complete parameter tracking translation map to CLI execution layer
     CLI_MAPPING = {
         "data_dir": "--data_dir",
         "lst": "--lst",
@@ -128,56 +125,64 @@ class JPEG_AI_TrainInterface(BaseInterface):
         "copy_to_train_url_dir": "--copy_to_train_url_dir"
     }
 
+    def _prepare_list_files(self):
+        """1. Auto-populates 'lst'/'val_lst'. 2. Writes to temp files."""
+        extensions = ['*.png', '*.jpg', '*.jpeg', '*.bmp']
+        for key, dir_key in [("lst", "data_dir"), ("val_lst", "val_data_dir")]:
+            if not self.params.get(key) and self.params.get(dir_key):
+                files = []
+                for ext in extensions:
+                    files.extend(glob.glob(os.path.join(self.params[dir_key], ext)))
+                self.params[key] = ",".join(files)
+            
+            content = self.params.get(key, "")
+            if isinstance(content, str) and "," in content:
+                tmp = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt')
+                tmp.write(content.replace(',', '\n'))
+                tmp.close()
+                self.params[key] = tmp.name
+                atexit.register(lambda path=tmp.name: os.remove(path) if os.path.exists(path) else None)
+                print(f"[{self.TASK_NAME}] Generated manifest for {key}: {tmp.name}")
+
     def __init__(self, job_args=None, global_args=None):
         super().__init__(job_args, global_args)
-
-        # --- INTEGER BOOLEAN CONVERSION ---
+        self._prepare_list_files()
+        
+        # Aggressive Parameter Sanitization
+        cleaned_params = {}
         for key, val in self.params.items():
+            # Skip None, empty lists, empty strings, and empty dicts
+            if val is None or val == [] or val == "" or val == {}:
+                continue
+            
+            # Convert Boolean (True/False) to Integer (1/0)
             if isinstance(val, bool):
-                self.params[key] = 1 if val else 0
+                cleaned_params[key] = 1 if val else 0
+            else:
+                cleaned_params[key] = val
         
-        # Remove empty strings, empty lists, and None so they don't create dangling flags
-        empty_keys = [k for k, v in self.params.items() if v in ["", [], None]]
-        for k in empty_keys:
-            self.params.pop(k, None)
+        self.params = cleaned_params
+        self._check_and_compile_backend()
 
-
-        # --- RECOMMENDED JPEG-AI C++ COMPILATION ---
-        
-        
+    def _check_and_compile_backend(self):
         task_root = "JPEG-AI"
-        
-        # The stack trace shows it expects the 'ans' module here:
         destination_dir = os.path.join(task_root, "src/codec/entropy_coding/lib_wrappers/mans")
-        
-        # Check physically on disk for the compiled .so file
         compiled_extensions = glob.glob(os.path.join(destination_dir, "ans*.so"))
         
         if compiled_extensions:
             found_binary = os.path.basename(compiled_extensions[0])
-            print(f"[{self.TASK_NAME}] Verification complete: Found compiled backend binary ({found_binary}).")
+            print(f"[{self.TASK_NAME}] Verification complete: Found binary ({found_binary}).")
         else:
-            print(f"\n[WARNING] {self.TASK_NAME} is missing its compiled ANS arithmetic coder extensions.")
+            print(f"\n[WARNING] {self.TASK_NAME} is missing compiled extensions.")
             user_choice = input("Would you like to compile the arithmetic coder now for JPEG-AI? [y/N]: ").strip().lower()
-            
             if user_choice in ['y', 'yes']:
-                # Retrieve the explicit python environment path
-                # Safely pull the env_path directly from the dictionary passed into the class
-                target_env = self.params.get("env_path", "")
-                target_env = os.path.abspath(os.path.expanduser(target_env))
-
-                print(f"Compiling via Makefile: conda run --prefix {target_env} make build_test_libs")
+                target_env = os.path.abspath(os.path.expanduser(self.params.get("env_path", "")))
+                print(f"Compiling: conda run --prefix {target_env} make build_test_libs")
                 try:
-                    # Run the specific make command from the root of the JPEG-AI repository
-                    subprocess.run(
-                        ["conda", "run", "--prefix", target_env, "make", "build_test_libs"], 
-                        cwd=task_root, 
-                        check=True
-                    )
-                    
-                    print("[SUCCESS] JPEG-AI C++ libraries compiled successfully!")
+                    subprocess.run(["conda", "run", "--prefix", target_env, "make", "build_test_libs"], 
+                                   cwd=task_root, check=True)
+                    print("[SUCCESS] Compiled successfully!")
                 except subprocess.CalledProcessError as e:
-                    print(f"[ERROR] Compilation failed with exit code {e.returncode}.")
-
+                    print(f"[ERROR] Compilation failed: {e.returncode}.")
             else:
-                print("Skipping compilation. The upcoming training run will likely fail with a ModuleNotFoundError or ImportError.")
+                print("Skipping compilation.")

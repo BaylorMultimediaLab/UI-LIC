@@ -12,6 +12,9 @@ data
 testing-training-env
 training-testing-env
 
+experiments
+runs
+
 # StableCodec ELIC model
 elic_official.pth
 

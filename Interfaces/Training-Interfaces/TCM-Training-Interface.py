@@ -21,6 +21,7 @@ class LICTCMTrainInterface(BaseInterface):
     # Mirrored exactly from the parse_args defaults of your TCM training script
     DEFAULT_VARS = {
         "model": "bmshj2018-factorized",
+        "dataset": None,  # <-- Clean, explicit "empty" state 
         "train_dataset": "train",
         "test_dataset": "test",        
         "epochs": 50,
@@ -39,7 +40,7 @@ class LICTCMTrainInterface(BaseInterface):
         "type": "mse",
         "save_path": None,
         "skip_epoch": 0,
-        "N": 128,
+        "N": 64,
         "lr_epoch": [45, 48],  # Milestones list for MultiStepLR
         "continue_train": True
     }

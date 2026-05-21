@@ -1,11 +1,8 @@
-
 from base_interface import BaseInterface
-
 
 class ELICTrainInterface(BaseInterface):
 
     TASK_NAME = "ELIC"
-    
     
     ## USING MODULE EXECUTION RATHER THAN EXPLICIT PATH BASED
     USE_MODULE_EXECUTION = True
@@ -13,14 +10,16 @@ class ELICTrainInterface(BaseInterface):
     EXECUTION_PATH = "playground.train"
     
     # Enforce these to avoid accidental default overwrites
-    REQUIRED_ARGS = ["experiment", "dataset"]
+    REQUIRED_ARGS = ["experiment", "dataset", "train_dataset", "test_dataset"]
 
     # Mirrored exactly from the argparse defaults
     DEFAULT_VARS = {
         "experiment": "0483mse",
-        "dataset": "/mnt/c/Users/Nicholas_Nolen1/data", 
-        "train_split": "",  # Default subfolder
-        "test_split": "",        # Default subfolder        
+        "dataset": None,  
+        "train_dataset": None, 
+        "test_dataset": None,   
+        "train_split": "", 
+        "test_split": "",       
         "epochs": 60000,
         "learning_rate": 1e-4,
         "num_workers": 8,
@@ -49,7 +48,6 @@ class ELICTrainInterface(BaseInterface):
         "bs": "batch_size",
         "c": "checkpoint",
         "gpu": "gpu_id",
-        "train_dataset": "dataset",
         "output_directory": "experiment"
     }
 
@@ -57,8 +55,10 @@ class ELICTrainInterface(BaseInterface):
     CLI_MAPPING = {
         "experiment": "--experiment",
         "dataset": "--dataset",
-        "train_split": "--train-split", 
-        "test_split": "--test-split",
+        "train_dataset": "--train_dataset", 
+        "test_dataset": "--test_dataset",   
+        "train_split": "--train_split", 
+        "test_split": "--test_split",
         "epochs": "--epochs",
         "learning_rate": "--learning-rate",
         "num_workers": "--num-workers",

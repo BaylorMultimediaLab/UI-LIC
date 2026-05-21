@@ -10,7 +10,7 @@ class ELICTrainInterface(BaseInterface):
     EXECUTION_PATH = "playground.train"
     
     # Enforce these to avoid accidental default overwrites
-    REQUIRED_ARGS = ["experiment", "dataset", "train_dataset", "test_dataset"]
+    REQUIRED_ARGS = ["experiment", "train_dataset", "test_dataset"]
 
     # Mirrored exactly from the argparse defaults
     DEFAULT_VARS = {

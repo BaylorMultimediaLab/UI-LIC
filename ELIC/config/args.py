@@ -11,7 +11,7 @@ def train_options():
         required=False,
         help="Experiment name"
     )
-    # added arguments to enable dynamic paths for training and testing
+    # added arguments to enable dynamic paths for training and testing split
     parser.add_argument(
         "--train-split",
         type=str, 
@@ -31,6 +31,19 @@ def train_options():
         type=str,
         required=False,
         help="Training dataset"
+    )
+    ## can be used instead of a singular datset folder with splits to allow for testing and training sets in different folders
+    parser.add_argument(
+        '--train_dataset', 
+        type=str, 
+        default=None, 
+        help='Explicit path to training dataset'
+    )
+    parser.add_argument(
+        '--test_dataset', 
+        type=str, 
+        default=None, 
+        help='Explicit path to testing dataset (e.g. Kodak)'
     )
     parser.add_argument(
         "-e",

@@ -74,17 +74,27 @@ def main():
     )
 
     # get names from args
+
+    # Safely grab the explicit overrides passed to script
+    explicit_train = getattr(args, 'train_dataset', None)
+    explicit_test = getattr(args, 'test_dataset', None)
     
-    # 1. Extract splits (default to empty string instead of hardcoded 'train256_0')
-    train_split_name = getattr(args, 'train_split', '')
-    test_split_name = getattr(args, 'test_split', '')
+    train_split = getattr(args, 'train_split', '')
+    test_split = getattr(args, 'test_split', '')
+
+    # Determine Training Path: Use explicit path if provided, otherwise fallback to using dataset root + split variables
+    if explicit_train:
+        train_path = explicit_train
+    else:
+        train_path = os.path.join(args.dataset, train_split) if train_split else args.dataset
+
+    # Determine Test Path: Use explicit path if provided, otherwise fallback to using dataset root + split variables
+    if explicit_test:
+        test_path = explicit_test
+    else:
+        test_path = os.path.join(args.dataset, test_split) if test_split else args.dataset    
     
-    # 2. Build the exact paths manually. 
-    # If a split is provided, append it. If not, just use the direct dataset path.
-    train_path = os.path.join(args.dataset, train_split_name) if train_split_name else args.dataset
-    test_path = os.path.join(args.dataset, test_split_name) if test_split_name else args.dataset
-    
-    # 3. Pass split="" so ImageFolder reads directly from the exact paths we just built
+    # Pass split="" so ImageFolder reads directly from the exact paths we just built
     train_dataset = ImageFolder(train_path, split="", transform=train_transforms)
     test_dataset = ImageFolder(test_path, split="", transform=test_transforms)
 

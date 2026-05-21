@@ -69,8 +69,8 @@ def _parse_args() -> argparse.Namespace:
     # Optimizer and objective settings.
     p.add_argument("--lr", type=float, default=1e-4)
     p.add_argument("--lambda_rd", type=float, default=0.01)
-    p.add_argument("--max_steps", type=int, default=20000)
-
+    p.add_argument("--epochs", type=int, default=50, help="Number of complete passes through the dataset")
+    
     # Rate control:
     # - if qp is fixed (>=0), train a single operating point
     # - if qp < 0, randomly sample qp per batch to cover the full range (0..63)
@@ -240,70 +240,59 @@ def main() -> None:
         __import__("json").dumps(asdict(train_cfg) | vars(args), indent=2, default=str),
         encoding="utf-8",
     )
-
+    
     step = 0
     model.train()
 
-    # We run "step-based" training rather than "epoch-based".
-    # Why: the dataset is patch-sampled; "epochs" are less meaningful than a fixed step budget.
-    pbar = tqdm(total=int(args.max_steps), desc="train", dynamic_ncols=True)
-    loader_iter = iter(train_loader)
+    # We now loop over epochs instead of a fixed number of steps.
+    for epoch in range(int(args.epochs)):
+        
+        # Attach tqdm directly to the dataloader to show progress per epoch
+        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{int(args.epochs)}", dynamic_ncols=True)
+        
+        for batch in pbar:
+            # Transfer a batch to device.
+            x = batch.to(device=device, non_blocking=True)
+            # Either fixed or randomly sampled QP.
+            qp = _sample_qp(args, device)
 
-    while step < int(args.max_steps):
-        try:
-            batch = next(loader_iter)
-        except StopIteration:
-            # Restart the loader when it is exhausted.
-            loader_iter = iter(train_loader)
-            batch = next(loader_iter)
+            # Forward computes x_hat, (bpp_y, bpp_z), mse, and loss.
+            out = model(x, qp=qp)
 
-        # Transfer a batch to device.
-        x = batch.to(device=device, non_blocking=True)
-        # Either fixed or randomly sampled QP.
-        qp = _sample_qp(args, device)
+            # Standard PyTorch training step.
+            optimizer.zero_grad(set_to_none=True)
+            out.loss.backward()
+            optimizer.step()
 
-        # Forward computes x_hat, (bpp_y, bpp_z), mse, and loss.
-        # Why these metrics: they are the pieces of the RD objective.
-        out = model(x, qp=qp)
+            step += 1
 
-        # Standard PyTorch training step.
-        optimizer.zero_grad(set_to_none=True)
-        out.loss.backward()
-        optimizer.step()
+            if step % int(args.log_every) == 0:
+                # live training metrics on the console.
+                pbar.set_postfix(
+                    qp=int(qp),
+                    loss=float(out.loss.item()),
+                    bpp=float((out.bpp_y + out.bpp_z).item()),
+                    mse=float(out.mse.item()),
+                )
 
-        step += 1
-        pbar.update(1)
+            if step % int(args.save_every) == 0:
+                _save_weights_only(out_dir, step, dmci)
 
-        if step % int(args.log_every) == 0:
-            # tqdm postfix gives live training metrics on the console.
-            pbar.set_postfix(
-                qp=int(qp),
-                loss=float(out.loss.item()),
-                bpp=float((out.bpp_y + out.bpp_z).item()),
-                mse=float(out.mse.item()),
-            )
+            if val_loader is not None and step % int(args.val_every) == 0:
+                val_qp = int(args.qp) if int(args.qp) >= 0 else 32
+                stats = _run_validation(
+                    model=model,
+                    val_loader=val_loader,
+                    qp=val_qp,
+                    device=device,
+                    max_batches=int(args.val_batches),
+                )
+                with (out_dir / "val_log.jsonl").open("a", encoding="utf-8") as f:
+                    f.write(__import__("json").dumps({"step": step, "epoch": epoch+1, **stats}) + "\n")
+                
+                model.train() # Return to training mode after validation
 
-        if step % int(args.save_every) == 0:
-            # Save a weights-only snapshot you can directly feed to `test_video.py --model_path_i`.
-            _save_weights_only(out_dir, step, dmci)
-
-        if val_loader is not None and step % int(args.val_every) == 0:
-            # Validate at a fixed QP for comparable curves; default to mid-QP if sampling.
-            val_qp = int(args.qp) if int(args.qp) >= 0 else 32
-            stats = _run_validation(
-                model=model,
-                val_loader=val_loader,
-                qp=val_qp,
-                device=device,
-                max_batches=int(args.val_batches),
-            )
-            # Append-only JSONL so it's easy to plot over time.
-            with (out_dir / "val_log.jsonl").open("a", encoding="utf-8") as f:
-                f.write(__import__("json").dumps({"step": step, **stats}) + "\n")
-            # Return to training mode after validation.
-            model.train()
-
-    # Final checkpoint at the end of training.
+    # Final checkpoint at the very end of training.
     _save_weights_only(out_dir, step, dmci)
     pbar.close()
 

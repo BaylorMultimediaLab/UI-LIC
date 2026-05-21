@@ -87,6 +87,7 @@ The following models are integrated into the platform, each with a specialized i
 - **Recommended Python Version:** 3.8
 - **Core Concept:** The standardized approach for the next generation of AI-based image coding.
 - **Strength:** Focused on interoperability and rigorous testing across a wide range of content and bitrates, following the JPEG-AI Common Test Conditions (CTC).
+- **Key Consideration:** The JPEG-AI training routine has been modified in src/train.json for single GPU use. For multiple GPUs, see JPEG-AI/README.md
 
 ---
 

@@ -1,21 +1,22 @@
 {
     "MSE_FixedRate_64":
-        [
-            "--epochs",
-            64,
-            "--loss_type",
-            "mse",
-            "--base_warmup_epoch",
-            ${ if args.base_warmup_epoch is None: }$ 1.0 ${ :else: }$ ${ write(args.base_warmup_epoch) }$ ${ :end-if }$,
-            "--lr",
-            ${ if args.lr is None: }$ 1e-03 ${ :else: }$ ${ write(args.lr) }$ ${ :end-if }$,
-            "--anneal_final_lr",
-            ${ if args.anneal_final_lr is None: }$ 1e-04 ${ :else: }$ ${ write(args.anneal_final_lr) }$ ${ :end-if }$,
-            "--frozen_part", "gain_unit",
-            "--beta_list", 
-            ${ beta }$
-        ],
-    "Mixed_FixedRate_36": [
+    [
+        "--workers", 
+        2,
+        "--epochs",
+        64,
+        "--loss_type",
+        "mse",
+        "--base_warmup_epoch",
+        ${ if args.base_warmup_epoch is None: }$ 1.0 ${ :else: }$ ${ write(args.base_warmup_epoch) }$ ${ :end-if }$,
+        "--lr",
+        ${ if args.lr is None: }$ 1e-04 ${ :else: }$ ${ write(args.lr) }$ ${ :end-if }$,
+        "--anneal_final_lr",
+        ${ if args.anneal_final_lr is None: }$ 1e-05 ${ :else: }$ ${ write(args.anneal_final_lr) }$ ${ :end-if }$,
+        "--frozen_part", "gain_unit",
+        "--beta_list", 
+        ${ beta }$
+    ],    "Mixed_FixedRate_36": [
             "--beta_list",
             ${ beta_list_stageII }$,
             "--epochs",

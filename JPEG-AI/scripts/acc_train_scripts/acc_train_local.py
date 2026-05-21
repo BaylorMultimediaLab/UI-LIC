@@ -417,7 +417,7 @@ def main(args=None):
         # changed from (4) to dynamic count:
         # If you have 4 GPUs assigned in your config, it uses 4 workers.
         # If you have 1 GPU, it uses 1 worker (serial).
-        num_workers = len(set(beta_2_gpus.values()))
+        num_workers = 1
 
         
         with tempfile.TemporaryDirectory() as train_output_dir:

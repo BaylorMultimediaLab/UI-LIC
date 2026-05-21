@@ -67,6 +67,8 @@ The following models are integrated into the platform, each with a specialized i
 - **Recommended Python Version:** 3.12
 - **Core Concept:** Optimized for low-latency and real-time performance.
 - **Strength:** Excellent for scenarios requiring fast inference and high-quality I-frame (Intra) compression as a foundation for video tasks.
+- **Notable Additions:** We constructed a script to train the i-frame model for DCVC-RT as well as a script to test the compression for a single i-frame
+to evaluate DCVC-RT's image compression capabilites.
 
 ### **LIC-TCM**
 *Learned Image Compression with Mixed Transformer-CNN Architectures*

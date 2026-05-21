@@ -25,7 +25,7 @@ class DCVCRTTrainInterface(BaseInterface):
         "num_workers": 2,
         "lr": 1e-4,
         "lambda_rd": 0.01,
-        "max_steps": 20000,
+        "epochs": 50,          
         "qp": -1,
         "device": "cuda",
         "seed": 0,
@@ -43,7 +43,8 @@ class DCVCRTTrainInterface(BaseInterface):
         "learning_rate": "lr",
         "lambda": "lambda_rd",
         "lmbda": "lambda_rd",
-        "bs": "batch_size"
+        "bs": "batch_size",
+        "e": "epochs"         
     }
 
     # Map the internal configuration standard names to the argparse CLI flags
@@ -56,7 +57,7 @@ class DCVCRTTrainInterface(BaseInterface):
         "num_workers": "--num_workers",
         "lr": "--lr",
         "lambda_rd": "--lambda_rd",
-        "max_steps": "--max_steps",
+        "epochs": "--epochs",  
         "qp": "--qp",
         "device": "--device",
         "seed": "--seed",

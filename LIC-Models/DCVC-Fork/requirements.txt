@@ -6,3 +6,5 @@ bd-metric
 pillow
 pybind11
 torch
+torchvision
+pillow

@@ -5,6 +5,8 @@ import time
 import argparse
 import inspect
 import importlib.util
+import shutil
+
 #
 # Reads training and testing interfaces, requires variables to be passed for selected
 # interfaces.
@@ -52,6 +54,73 @@ class Dispatcher:
                     except Exception as e:
                         print(f"  -> [WARNING] Failed to load {filename}: {e}")
 
+
+    def _verify_crop_sizes(self, data_dir, crop_size):
+        """Scans data_dir for images smaller than crop_size and offers to remove them."""
+        if not data_dir or not os.path.isdir(data_dir) or not crop_size:
+            return
+
+        # Normalize crop_size whether it is an int (320) or a list ([256, 256])
+        if isinstance(crop_size, int):
+            min_w = min_h = crop_size
+        elif isinstance(crop_size, list) and len(crop_size) >= 2:
+            min_w, min_h = crop_size[0], crop_size[1]
+        else:
+            return  # Unknown crop_size format
+
+        try:
+            from PIL import Image
+        except ImportError:
+            print("  -> [WARNING] 'Pillow' is not installed. Skipping crop size verification.")
+            return
+
+        invalid_files = []
+        valid_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.webp')
+        
+        print(f"  -> Verifying images in {data_dir} are at least {min_w}x{min_h}...")
+        
+        # Scan directory
+        for root, _, files in os.walk(data_dir):
+            for file in files:
+                if file.lower().endswith(valid_extensions):
+                    filepath = os.path.join(root, file)
+                    try:
+                        with Image.open(filepath) as img:
+                            w, h = img.size
+                            if w < min_w or h < min_h:
+                                invalid_files.append(filepath)
+                    except Exception:
+                        pass # Ignore corrupted files here; let the dataloader handle them
+        
+        if invalid_files:
+            print(f"\n  -> [WARNING] Found {len(invalid_files)} images smaller than the crop size.")
+            print("     These will likely crash the PyTorch dataloader.")
+            choice = input("     Would you like to move these out of the training folder? (y/N): ")
+            
+            if choice.lower() == 'y':
+                custom_path = input(f"     Enter a destination path (or press Enter to default to '../skipped_undersized_{min_w}x{min_h}'): ").strip()
+                
+                if custom_path:
+                    # Resolve '~/' and make absolute
+                    skipped_dir = os.path.abspath(os.path.expanduser(custom_path))
+                else:
+                    # Default safely outside the train directory
+                    skipped_dir = os.path.abspath(os.path.join(data_dir, "..", f"skipped_undersized_{min_w}x{min_h}"))
+                
+                os.makedirs(skipped_dir, exist_ok=True)
+                
+                for fpath in invalid_files:
+                    filename = os.path.basename(fpath)
+                    dest = os.path.join(skipped_dir, filename)
+                    
+                    # Prevent overwriting if two files have the same name in different subfolders
+                    if os.path.exists(dest):
+                        dest = os.path.join(skipped_dir, f"{int(time.time())}_{filename}")
+                        
+                    shutil.move(fpath, dest)
+                print(f"  -> Successfully moved {len(invalid_files)} images to: {skipped_dir}\n")
+            else:
+                print("  -> Leaving files untouched. Execution may fail if the model cannot pad them.\n")
 
     def _normalize_booleans(self, args_dict):
         """Helper to recursively scan and turn 'True'/'False' strings into Python booleans."""
@@ -137,6 +206,12 @@ class Dispatcher:
             if env_path:
                 clean_env_path = os.path.abspath(os.path.expanduser(env_path))
                 interface_instance.ENV_PATH = clean_env_path
+                
+            target_data_dir = clean_job_args.get("data_dir") or clean_global_args.get("train_dataset")
+            target_crop_size = clean_job_args.get("crop_size") or clean_global_args.get("patch_size")
+            if target_data_dir and target_crop_size:
+                self._verify_crop_sizes(target_data_dir, target_crop_size)
+
                 
             is_valid, missing_args = interface_instance.validate()
             

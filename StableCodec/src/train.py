@@ -48,7 +48,7 @@ def main(args):
 
     train_dataset = ImageFolder(
         args.train_dataset,
-        split="train", # from Kodak
+        split="", # from Kodak
         transform=transforms.Compose([
             # transforms.ToPILImage(), IMAGE FOLDER ALREADY HANDLES THIS
             transforms.RandomCrop((args.train_patch_size, args.train_patch_size)),
@@ -60,7 +60,7 @@ def main(args):
     )
     test_dataset = ImageFolder(
         args.test_dataset,
-        split="kodak", # from Kodak
+        split="", # from Kodak
         transform=transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),

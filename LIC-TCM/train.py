@@ -137,7 +137,7 @@ def train_one_epoch(
         aux_loss.backward()
         aux_optimizer.step()
 
-        if i % 1000 == 0:
+        if i % 50 == 0:
             if type == 'mse':
                 print(
                     f"Train epoch {epoch}: ["
@@ -234,7 +234,7 @@ def parse_args(argv):
         help="Model architecture (default: %(default)s)",
     )
     parser.add_argument(
-        "-d", "--dataset", type=str, required=True, help="Training dataset"
+        "-d", "--dataset", type=str, required=False, help="Legacy: unused but kept for compatibility"
     )
     parser.add_argument(
         "-tr_d",

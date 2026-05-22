@@ -1,7 +1,6 @@
 import argparse
 import os
 import time
-import glob
 import subprocess
 import tempfile
 import re
@@ -28,7 +27,9 @@ def parse_args():
     parser.add_argument('--input', type=str, required=True, help="Path to input image or directory")
     parser.add_argument('--qp', type=int, default=27, help="Quantization parameter")
     parser.add_argument('--device', type=str, default="cuda", help="cpu or cuda")
-    parser.add_argument('--save_dir', type=str, default=None, help="Directory to save decoded images (optional)")
+    
+    parser.add_argument('--rec_path', type=str, required=True)
+    parser.add_argument('--bin_path', type=str, required=True)
     return parser.parse_args()
 
 def calculate_vmaf(orig_path, recon_img):
@@ -81,12 +82,24 @@ def process_image(img_path, net, lpips_fn, args):
     with torch.no_grad():
         start = time.time()
         encoded = net.compress(x_padded, args.qp)
+
+        img_name = os.path.splitext(os.path.basename(img_path))[0]
+
+        bin_file = os.path.join(
+            args.bin_path,
+            f"{img_name}_qp{args.qp}.bin"
+        )
         
+        with open(bin_file, "wb") as f:
+            f.write(encoded["bit_stream"])
+
         sps = {
             'sps_id': 0, 'height': pic_height, 'width': pic_width, 
             'ec_part': 0, 'use_ada_i': 0
         }
-        decoded = net.decompress(encoded['bit_stream'], sps, args.qp)
+
+        decoded = net.decompress(encoded["bit_stream"], sps, args.qp)        
+        
         end = time.time()
 
     # --- Unpad and Clamp ---
@@ -122,12 +135,11 @@ def process_image(img_path, net, lpips_fn, args):
     print(f"[{os.path.basename(img_path)}] BPP: {bpp:.4f} | PSNR: {psnr:.2f} | MS-SSIM: {msssim:.4f} | VMAF: {vmaf_val:.2f} | LPIPS: {lpips_val:.4f} | Time: {inference_time:.0f}ms")
     
     # --- Save Decoded Image ---
-    if args.save_dir:
-        os.makedirs(args.save_dir, exist_ok=True)
-        base_name = os.path.basename(img_path)
-        name, _ = os.path.splitext(base_name)
-        out_path = os.path.join(args.save_dir, f"{name}_q{args.qp}_bpp{bpp:.3f}_psnr{psnr:.2f}.png")
-        recon_img.save(out_path)
+    base_name = os.path.basename(img_path)
+    name, _ = os.path.splitext(base_name)
+
+    out_path = os.path.join(args.rec_path, f"{name}_q{args.qp}_bpp{bpp:.3f}_psnr{psnr:.2f}.png")
+    recon_img.save(out_path)
 
     return bpp, psnr, msssim, vmaf_val, lpips_val, inference_time
 
@@ -137,6 +149,9 @@ def main():
     if not HAS_LPIPS:
         print("[WARNING] 'lpips' python package not found. LPIPS score will be 0.0.")
         print("          Install it via: pip install lpips")
+
+    os.makedirs(args.bin_path, exist_ok=True)
+    os.makedirs(args.rec_path, exist_ok=True)
 
     # 1. Init Models
     net = DMCI().to(args.device)

@@ -8,7 +8,7 @@ class DCVCRTImageTestInterface(BaseInterface):
     
     USE_MODULE_EXECUTION = False
     EXECUTION_PATH = "Testing/test_image_encoding.py"
-    REQUIRED_ARGS = ["model_path", "input"]
+    REQUIRED_ARGS = ["model_path", "input", "save_dir"]
     ACTION_FLAGS = []
 
     DEFAULT_VARS = {
@@ -26,7 +26,6 @@ class DCVCRTImageTestInterface(BaseInterface):
         "test_image": "input",
         "test_dataset": "input",
         "output_directory": "save_dir",
-        "save_path": "save_dir"
     }
 
     CLI_MAPPING = {
@@ -34,11 +33,13 @@ class DCVCRTImageTestInterface(BaseInterface):
         "input": "--input",
         "qp": "--qp",
         "device": "--device",
-        "save_dir": "--save_dir"
-    }    
+        "rec_path": "--rec_path",
+        "bin_path": "--bin_path",
+    }
+
     def __init__(self, job_args=None, global_args=None):
         super().__init__(job_args, global_args)
-        
+
         # --- UNIFIED TRANSLATION LOGIC ---
         if "cuda" in self.params:
             if self.params["cuda"] is True:
@@ -46,6 +47,18 @@ class DCVCRTImageTestInterface(BaseInterface):
             elif self.params["cuda"] is False:
                 self.params["device"] = "cpu"
             del self.params["cuda"]
+
+        # --- SAVE_DIR → REC/BIN SPLIT (IMPORTANT) ---
+        if "save_dir" in self.params and self.params["save_dir"] is not None:
+            base = self.params["save_dir"]
+
+            self.params["rec_path"] = os.path.join(base, "recon")
+            self.params["bin_path"] = os.path.join(base, "bitstreams")
+
+            # optional safety
+            os.makedirs(self.params["rec_path"], exist_ok=True)
+            os.makedirs(self.params["bin_path"], exist_ok=True)
+
 
     def _check_and_install_dependencies(self):
         """Checks the target ENV_PATH for required packages and prompts installation if missing."""

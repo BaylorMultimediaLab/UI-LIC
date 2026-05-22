@@ -11,12 +11,6 @@ This tool provides a graphical interface for running and comparing Learned Image
 
 ## Setup
 
-Ensure you have the required dependencies installed:
-
-```bash
-pip install streamlit pillow
-```
-
 ## Running the Visualizer
 
 From the project root directory, run:

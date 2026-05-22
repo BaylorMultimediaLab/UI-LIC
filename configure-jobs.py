@@ -218,7 +218,7 @@ class ConfigGenerator:
             
             print(f"\n--- Configuring Task: {task_key} ---")
             
-            directory = self._prompt("Enter directory", default=task_name)
+            directory = self._prompt("Enter directory", default=f"LIC-Models/{task_name}")
             env_path = self._prompt("Enter env_path", default=f"~/{directory}-env")
             
             task_info = {

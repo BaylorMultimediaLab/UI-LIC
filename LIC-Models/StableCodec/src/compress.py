@@ -78,7 +78,12 @@ def main(args):
       
     bpp = []
     pos_tag_prompt = [1]
-    images = glob.glob(args.img_path + '/*.png')
+    # FIX: support png + jpg
+    images = sorted(
+        glob.glob(os.path.join(args.img_path, "*.png")) +
+        glob.glob(os.path.join(args.img_path, "*.jpg")) +
+        glob.glob(os.path.join(args.img_path, "*.jpeg"))
+    )
     print(f'\nFind {str(len(images))} images in {args.img_path}\n')
     
     for img_path in images:

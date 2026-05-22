@@ -85,11 +85,15 @@ to evaluate DCVC-RT's image compression capabilites.
   Compile LIC-HPCM/src/entropy_models through python setup.py build_ext --inplace
 - **Implementation Decisions:** Choose between two models [HPCM_Base/HPCM_Large]
 
-### **JPEG-AI**
-- **Recommended Python Version:** 3.8
-- **Core Concept:** The standardized approach for the next generation of AI-based image coding.
-- **Strength:** Focused on interoperability and rigorous testing across a wide range of content and bitrates, following the JPEG-AI Common Test Conditions (CTC).
-- **Key Consideration:** The JPEG-AI training routine has been modified in src/train.json for single GPU use. For multiple GPUs, see JPEG-AI/README.md
+### **RwkvCompress**
+*Efficient Learned Image Compression via RWKV architecture*
+- **Recommended Python Version:** 3.10
+- **Core Concept:** Adapts the Receptance Weighted Key Value (RWKV) architecture—a linear-attention Transformer-RNN hybrid—to learn latent representations for image compression.
+- **Strength:** Achieves a unique balance between Transformer-level global dependency modeling and RNN-level computational efficiency. It provides scalable context modeling without the heavy quadratic memory cost associated with standard self-attention mechanisms.
+- **Workflow Notes:** 
+    - Training requires the compilation of custom CUDA extensions (`biwkv4`). 
+    - Ensure your system environment is configured with GCC-12 or similar to handle the CUDA kernel compilation successfully.
+    - The interface integrates seamlessly with the dispatcher, allowing for fine-tuned Rate-Distortion optimization via the Lagrangian parameter ($\lambda$).
 
 ---
 

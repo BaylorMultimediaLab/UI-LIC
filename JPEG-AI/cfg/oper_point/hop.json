@@ -1,3 +1,0 @@
-{
-	"!include": ["common.json", "hop_Enc.json", "hop_Dec.json"]
-}

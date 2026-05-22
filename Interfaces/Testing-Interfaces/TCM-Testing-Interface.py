@@ -4,14 +4,15 @@ from base_interface import BaseInterface
 
 class LICTCMTestInterface(BaseInterface):
 
-    TASK_NAME = "LIC-TCM-Test"
+    TASK_NAME = "LIC-TCM"
     
     USE_MODULE_EXECUTION = False
     
-    EXECUTION_PATH = "eval.py" 
+    # Fixed typo here
+    EXECUTION_PATH = "custom-evaluation.py" 
     
-    # Checkpoint and data are mandatory
-    REQUIRED_ARGS = ["checkpoint", "data"]
+    # Checkpoint, data, and save_dir are mandatory for saving functionality
+    REQUIRED_ARGS = ["checkpoint", "data", "save_dir"]
     
     # Flags for argparse 'action="store_true"'
     ACTION_FLAGS = ["cuda", "real"]
@@ -19,36 +20,46 @@ class LICTCMTestInterface(BaseInterface):
     DEFAULT_VARS = {
         "checkpoint": None,
         "data": None,
+        "save_dir": None,
         "clip_max_norm": 1.0,
         "cuda": True,
-        "real": False
+        "real": True  # Must be True to trigger actual compression/bitstream generation
     }
 
+    # Added aliases so you can use "output" in your dispatcher config
     ALIASES = {
         "c": "checkpoint",
         "d": "data",
-        "dataset": "data"
+        "dataset": "data",
+        "output": "save_dir",
+        "out": "save_dir",
+        "test_dataset": "data"
     }
 
     CLI_MAPPING = {
         "checkpoint": "--checkpoint",
         "data": "--data",
+        "save_dir": "--save_dir",
         "clip_max_norm": "--clip_max_norm",
         "cuda": "--cuda",
         "real": "--real"
     }
 
-    def _check_and_install_dependencies(self):
-        """Checks for TCM evaluation requirements."""
-        python_exec = os.path.join(self.ENV_PATH, "bin", "python3") if hasattr(self, 'ENV_PATH') else "python3"
-        pkgs = ["pytorch_msssim", "PIL", "torch", "torchvision"]
+    def __init__(self, job_args=None, global_args=None):
+        super().__init__(job_args, global_args)
         
-        for pkg in pkgs:
-            try:
-                subprocess.check_call([python_exec, "-c", f"import {pkg}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except subprocess.CalledProcessError:
-                print(f" -> [WARNING] Missing dependency: {pkg}")
+        # Manually resolve the dataset path if the global config used 'test_dataset'
+        if not self.params.get("data") and global_args and "test_dataset" in global_args:
+            self.params["data"] = global_args["test_dataset"]
+            
+        # Expand user paths ('~') to ensure they work in the Linux shell
+        for key in ["checkpoint", "data", "save_dir"]:
+            if self.params.get(key):
+                self.params[key] = os.path.expanduser(self.params[key])
 
     def execute(self):
-        self._check_and_install_dependencies()
+        # Ensure output directory exists before running
+        if self.params.get("save_dir"):
+            os.makedirs(self.params["save_dir"], exist_ok=True)
+            
         super().execute()

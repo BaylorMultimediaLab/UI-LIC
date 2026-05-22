@@ -35,7 +35,7 @@ def main():
     logger_test = logging.getLogger('test')
 
     test_transforms = transforms.Compose([transforms.ToTensor()])
-    test_dataset = ImageFolder(args.dataset, split="kodak", transform=test_transforms)
+    test_dataset = ImageFolder(args.dataset, split="", transform=test_transforms)
     device = "cuda" if args.cuda and torch.cuda.is_available() else "cpu"
     test_dataloader = DataLoader(
         test_dataset,

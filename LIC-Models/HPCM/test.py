@@ -149,6 +149,21 @@ def test(args):
             enc_start = time.time()
             with torch.no_grad():
                 out_enc = model.compress(x_pad)
+                
+            bitstream_dir = os.path.join(args.save_dir, "bitstreams")
+            os.makedirs(bitstream_dir, exist_ok=True)
+            
+            # Save strings and shape to a .pt file
+            bitstream_path = os.path.join(bitstream_dir, f"bits_{img_name.rsplit('.', 1)[0]}.pt")
+            
+            torch.save({
+                "strings": out_enc["strings"],
+                "shape": out_enc["shape"]
+            }, bitstream_path)
+            
+            print(f"DEBUG: Saved bitstream to {bitstream_path}")
+
+
             torch.cuda.synchronize()
             enc_t = time.time() - enc_start
             
@@ -161,8 +176,12 @@ def test(args):
             x_hat = crop(out_dec["x_hat"], (h,w))
             
             # --- ADDED FOR SAVING IMAGE ---
-            os.makedirs(args.save_dir, exist_ok=True)
-            out_path = os.path.join(args.save_dir, f"rec_{img_name}")
+            recon_dir = os.path.join(args.save_dir, "reconstruction")
+            os.makedirs(recon_dir, exist_ok=True)
+
+            out_path = os.path.join(recon_dir, f"rec_{img_name}")
+            
+        
             # Clamp between 0 and 1 just in case the network predicted slightly out-of-bounds pixel values
             save_image(x_hat.clamp(0.0, 1.0), out_path)
             # ----------------------------------------

@@ -150,7 +150,6 @@ class ConfigGenerator:
         elif phase == "testing":
             prompts["num_workers"] = {"default": 1}
             prompts["test_dataset"] = {"default": None, "required": True, "is_path": True}
-            prompts["model_path"] = {"default": None, "required": True, "is_path": True}
             prompts["qp"] = {"default": 27}
             prompts["save_decoded_frame"] = {"default": False}
             prompts["metrics"] = {"default": "mse"}
@@ -219,7 +218,7 @@ class ConfigGenerator:
             print(f"\n--- Configuring Task: {task_key} ---")
             
             directory = self._prompt("Enter directory", default=f"LIC-Models/{task_name}")
-            env_path = self._prompt("Enter env_path", default=f"~/{directory}-env")
+            env_path = self._prompt("Enter env_path", default=f"~/{task_name}-env")
             
             task_info = {
                 "env_path": env_path,

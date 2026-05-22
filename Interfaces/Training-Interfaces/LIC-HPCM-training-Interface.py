@@ -8,7 +8,7 @@ import importlib
 
 class LIC_HCPM_TrainInterface(BaseInterface):
 
-    TASK_NAME = "LIC-HPCM"
+    TASK_NAME = "HPCM"
     
     USE_MODULE_EXECUTION = False
 

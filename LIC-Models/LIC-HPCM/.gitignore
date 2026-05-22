@@ -1,8 +1,0 @@
-
-# Compiled Python modules and C++ extensions
-*.so
-build/
-
-# Python cache
-__pycache__/
-*.pyc

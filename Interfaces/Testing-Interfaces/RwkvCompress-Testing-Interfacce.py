@@ -2,17 +2,20 @@ import os
 import subprocess
 from base_interface import BaseInterface
 
+
 class RwkvCompressTestInterface(BaseInterface):
 
     TASK_NAME = "RwkvCompress"
-    
+
     USE_MODULE_EXECUTION = False
-    EXECUTION_PATH = "eval.py"  # Ensure this matches your eval script filename
-    REQUIRED_ARGS = ["model", "checkpoints", "qualities", "input_dir"]
+    EXECUTION_PATH = "eval.py"
+
+    REQUIRED_ARGS = ["model", "checkpoints", "qualities", "input_dir", "output_dir"]
+
     ACTION_FLAGS = ["cuda", "half", "real", "verbose"]
 
     DEFAULT_VARS = {
-        "model": "bmshj2018-factorized",
+        "model": "LALIC",
         "entropy_coder": "ans",
         "cuda": True,
         "half": False,
@@ -25,11 +28,31 @@ class RwkvCompressTestInterface(BaseInterface):
         "result": "result.json"
     }
 
+    # -------------------------
+    # Aliases (expanded for consistency)
+    # -------------------------
     ALIASES = {
         "m": "model",
-        "test_dataset": "input_dir"
+        "model_name": "model",
+
+        "ckpt": "checkpoints",
+        "checkpoint": "checkpoints",
+
+        "q": "qualities",
+        "quality": "qualities",
+
+        "dataset": "input_dir",
+        "test_dataset": "input_dir",
+        "input": "input_dir",
+
+        "out": "output_dir",
+        "save_dir": "output_dir",
+        "output_directory": "output_dir",
     }
 
+    # -------------------------
+    # CLI mapping matches eval.py exactly
+    # -------------------------
     CLI_MAPPING = {
         "model": "-m",
         "entropy_coder": "-c",
@@ -37,10 +60,41 @@ class RwkvCompressTestInterface(BaseInterface):
         "half": "--half",
         "real": "--real",
         "verbose": "-v",
+
         "checkpoints": "-p",
         "qualities": "-q",
+
         "input_dir": "-i",
         "output_dir": "-o",
-        "result": "-r"
+        "result": "-r",
     }
 
+    def __init__(self, job_args=None, global_args=None):
+        super().__init__(job_args, global_args)
+
+        # normalize cuda flag if passed in alternative form
+        if "cuda" in self.params:
+            if self.params["cuda"] is True:
+                self.params["cuda"] = True
+            elif self.params["cuda"] is False:
+                self.params["cuda"] = False
+
+    def execute(self):
+        """
+        Ensures list args (checkpoints/qualities) are properly formatted
+        before execution.
+        """
+        # Ensure checkpoints + qualities are lists (critical for argparse -p/-q nargs="*")
+        if isinstance(self.params.get("checkpoints"), str):
+            self.params["checkpoints"] = [self.params["checkpoints"]]
+
+        if isinstance(self.params.get("qualities"), str):
+            self.params["qualities"] = [self.params["qualities"]]
+
+        if not isinstance(self.params.get("checkpoints"), list):
+            raise ValueError("checkpoints must be a list")
+
+        if not isinstance(self.params.get("qualities"), list):
+            raise ValueError("qualities must be a list")
+
+        super().execute()

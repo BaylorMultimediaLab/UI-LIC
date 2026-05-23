@@ -15,6 +15,7 @@ import builtins
 import queue
 import json
 import subprocess
+import time
 from dispatcher import Dispatcher
 
 try:
@@ -200,35 +201,45 @@ class LICApp:
         self.paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         self.paned.pack(fill=tk.BOTH, expand=True)
 
-        self.sidebar = ttk.Frame(self.paned, width=450, padding=20)
+        self.sidebar = ttk.Frame(self.paned, width=400, padding=20)
         self.paned.add(self.sidebar, weight=1)
 
-        ttk.Label(self.sidebar, text="1. Global Settings", style='Header.TLabel').pack(anchor="w", pady=(0, 10))
+        # 1. Global Toggle at the top
+        self.show_advanced_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(self.sidebar, text="Advanced Mode", variable=self.show_advanced_var, command=self.refresh_sidebar_and_models).pack(anchor="w", pady=(0, 15))
+
+        # 2. Path Settings (GT is always shown)
+        self.path_header = ttk.Label(self.sidebar, text="1. Path Settings", style='Header.TLabel')
+        self.path_header.pack(anchor="w", pady=(0, 10))
 
         self.gt_dir_var = tk.StringVar()
-        ttk.Label(self.sidebar, text="GT Images Directory:", font=self.F_BASE).pack(anchor="w")
-        gt_frame = ttk.Frame(self.sidebar)
-        gt_frame.pack(fill=tk.X, pady=(0, 15))
-        ttk.Entry(gt_frame, textvariable=self.gt_dir_var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(gt_frame, text="Browse", width=8, command=lambda: self.browse_dir(self.gt_dir_var, check_images=True)).pack(side=tk.LEFT, padx=(5,0))
+        self.gt_label = ttk.Label(self.sidebar, text="Input Images (Ground Truth):", font=self.F_BASE)
+        self.gt_label.pack(anchor="w")
+        self.gt_frame = ttk.Frame(self.sidebar)
+        self.gt_frame.pack(fill=tk.X, pady=(0, 15))
+        ttk.Entry(self.gt_frame, textvariable=self.gt_dir_var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(self.gt_frame, text="Browse", width=8, command=lambda: self.browse_dir(self.gt_dir_var, check_images=True)).pack(side=tk.LEFT, padx=(5,0))
 
+        # Advanced Global Settings (hidden by default)
+        self.adv_global_frame = ttk.Frame(self.sidebar)
+        
         self.out_dir_var = tk.StringVar(value=os.path.join(ROOT_DIR, "GUI-Visualizer/outputs"))
-        ttk.Label(self.sidebar, text="Output Directory:", font=self.F_BASE).pack(anchor="w")
-        out_frame = ttk.Frame(self.sidebar)
-        out_frame.pack(fill=tk.X, pady=(0, 15))
-        ttk.Entry(out_frame, textvariable=self.out_dir_var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(out_frame, text="Browse", width=8, command=lambda: self.browse_dir(self.out_dir_var)).pack(side=tk.LEFT, padx=(5,0))
+        ttk.Label(self.adv_global_frame, text="Results Output:", font=self.F_BASE).pack(anchor="w")
+        out_f = ttk.Frame(self.adv_global_frame)
+        out_f.pack(fill=tk.X, pady=(0, 15))
+        ttk.Entry(out_f, textvariable=self.out_dir_var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(out_f, text="Browse", width=8, command=lambda: self.browse_dir(self.out_dir_var)).pack(side=tk.LEFT, padx=(5,0))
 
-        # Add Evaluation Environment path field
-        default_eval_env = os.path.join(ROOT_DIR, "envs/eval-env")
-        self.eval_env_var = tk.StringVar(value=default_eval_env if os.path.exists(default_eval_env) else "")
-        ttk.Label(self.sidebar, text="Evaluation Env Path (eval-env):", font=self.F_BASE).pack(anchor="w")
-        eval_env_frame = ttk.Frame(self.sidebar)
-        eval_env_frame.pack(fill=tk.X, pady=(0, 20))
-        ttk.Entry(eval_env_frame, textvariable=self.eval_env_var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(eval_env_frame, text="Browse", width=8, command=lambda: self.browse_dir(self.eval_env_var)).pack(side=tk.LEFT, padx=(5,0))
+        default_base_env = os.path.join(ROOT_DIR, "envs")
+        self.base_env_dir_var = tk.StringVar(value=default_base_env if os.path.exists(default_base_env) else "")
+        ttk.Label(self.adv_global_frame, text="Environment Folder:", font=self.F_BASE).pack(anchor="w")
+        env_f = ttk.Frame(self.adv_global_frame)
+        env_f.pack(fill=tk.X, pady=(0, 20))
+        ttk.Entry(env_f, textvariable=self.base_env_dir_var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(env_f, text="Browse", width=8, command=lambda: self.browse_dir(self.base_env_dir_var)).pack(side=tk.LEFT, padx=(5,0))
 
-        ttk.Label(self.sidebar, text="2. Models", style='Header.TLabel').pack(anchor="w", pady=(0, 10))
+        # 3. Model Selection
+        ttk.Label(self.sidebar, text="2. Select Models", style='Header.TLabel').pack(anchor="w", pady=(0, 10))
 
         self.model_listbox = tk.Listbox(
             self.sidebar, 
@@ -308,8 +319,26 @@ class LICApp:
         self.log_area.pack(fill=tk.BOTH, expand=True, pady=(20, 0))
         self.log_area.bind("<Key>", self.block_input)
 
+    def refresh_sidebar_and_models(self):
+        """Toggle global path visibility and refresh model config views."""
+        if self.show_advanced_var.get():
+            # In advanced mode, insert the global adv frame after GT settings
+            self.adv_global_frame.pack(after=self.gt_frame, fill=tk.X)
+        else:
+            self.adv_global_frame.pack_forget()
+        
+        # Also refresh model configuration tabs
+        self.on_model_select()
+
     def setup_metrics_ui(self):
-        self.metrics_top = ttk.Frame(self.metrics_tab)
+        self.metrics_notebook = ttk.Notebook(self.metrics_tab)
+        self.metrics_notebook.pack(fill=tk.BOTH, expand=True)
+
+        # Tab 1: Single Model Details
+        self.model_details_tab = ttk.Frame(self.metrics_notebook, padding=10)
+        self.metrics_notebook.add(self.model_details_tab, text="Single Model Details")
+
+        self.metrics_top = ttk.Frame(self.model_details_tab)
         self.metrics_top.pack(fill=tk.X, pady=(0, 15))
 
         ttk.Label(self.metrics_top, text="Model Performance Summary", style='Header.TLabel').pack(side=tk.LEFT)
@@ -319,12 +348,12 @@ class LICApp:
         self.metrics_model_sel.bind("<<ComboboxSelected>>", self.refresh_metrics_display)
         ttk.Label(self.metrics_top, text="View Model:", font=self.F_BASE).pack(side=tk.RIGHT)
 
-        self.summary_frame = ttk.LabelFrame(self.metrics_tab, text="Averages", padding=10)
+        self.summary_frame = ttk.LabelFrame(self.model_details_tab, text="Averages", padding=10)
         self.summary_frame.pack(fill=tk.X, pady=(0, 15))
         self.summary_label = ttk.Label(self.summary_frame, text="No evaluation data loaded.", font=self.F_BTN)
         self.summary_label.pack()
 
-        table_frame = ttk.Frame(self.metrics_tab)
+        table_frame = ttk.Frame(self.model_details_tab)
         table_frame.pack(fill=tk.BOTH, expand=True)
 
         columns = ("image", "psnr", "ssim", "lpips", "bpp")
@@ -339,6 +368,26 @@ class LICApp:
 
         self.metrics_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Tab 2: Overall Summary
+        self.overall_summary_tab = ttk.Frame(self.metrics_notebook, padding=10)
+        self.metrics_notebook.add(self.overall_summary_tab, text="Summary Comparison")
+
+        summary_table_frame = ttk.Frame(self.overall_summary_tab)
+        summary_table_frame.pack(fill=tk.BOTH, expand=True)
+
+        sum_cols = ("model", "avg_psnr", "avg_bpp", "best_img", "best_psnr", "worst_img", "worst_psnr", "time")
+        self.summary_tree = ttk.Treeview(summary_table_frame, columns=sum_cols, show="headings")
+        
+        sum_col_widths = {"model": 120, "avg_psnr": 100, "avg_bpp": 80, "best_img": 150, "best_psnr": 100, "worst_img": 150, "worst_psnr": 100, "time": 100}
+        for col in sum_cols:
+            self.summary_tree.heading(col, text=col.replace("_", " ").upper())
+            self.summary_tree.column(col, anchor="center", width=sum_col_widths.get(col, 100))
+
+        sum_scroll = ttk.Scrollbar(summary_table_frame, orient="vertical", command=self.summary_tree.yview)
+        self.summary_tree.configure(yscrollcommand=sum_scroll.set)
+        self.summary_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        sum_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
     def block_input(self, event):
         is_modifier = event.state & (0x4 | 0x8 | 0x10 | 0x40)
@@ -385,7 +434,7 @@ class LICApp:
     def log(self, msg):
         self.log_queue.put(msg)
 
-    def on_model_select(self, event):
+    def on_model_select(self, event=None):
         for widget in self.config_scrollable_frame.winfo_children():
             widget.destroy()
 
@@ -404,6 +453,7 @@ class LICApp:
 
         interface_cls = self.registry[model_name]
         required_args = getattr(interface_cls, 'REQUIRED_ARGS', [])
+        show_advanced = self.show_advanced_var.get()
 
         if model_name not in self.model_configs:
             self.model_configs[model_name] = {
@@ -414,11 +464,11 @@ class LICApp:
 
             defaults = getattr(interface_cls, 'DEFAULT_VARS', {})
             for k, v in defaults.items():
-                if k in ['data', 'dataset', 'input', 'input_dir']: continue
+                if k in ['data', 'dataset', 'input', 'input_dir', 'save_dir', 'output']: continue
                 self.model_configs[model_name]["args"][k] = tk.StringVar(value=str(v))
 
             for req in required_args:
-                if req in ['data', 'dataset', 'input', 'input_dir']: continue
+                if req in ['data', 'dataset', 'input', 'input_dir', 'save_dir', 'output']: continue
                 if req not in self.model_configs[model_name]["args"]:
                     self.model_configs[model_name]["args"][req] = tk.StringVar()
 
@@ -443,17 +493,32 @@ class LICApp:
             if is_dir or is_file:
                 ttk.Button(row, text="Browse", width=8, command=lambda: self.browse_dir(var) if is_dir else self.browse_file(var)).pack(side=tk.LEFT, padx=(5,0))
 
-        create_row("Working Dir:", config["workdir"], is_dir=True, required=True)
-        create_row("Env Path:", config["env"], is_dir=True)
-
-        ttk.Separator(frame, orient='horizontal').pack(fill=tk.X, pady=10)
+        if show_advanced:
+            create_row("Working Dir:", config["workdir"], is_dir=True, required=True)
+            create_row("Env Path:", config["env"], is_dir=True)
+            ttk.Separator(frame, orient='horizontal').pack(fill=tk.X, pady=10)
 
         for arg_name, var in config["args"].items():
+            # Filter what to show in non-advanced mode
+            if not show_advanced:
+                # Always hide things that are standard defaults or handled elsewhere
+                if arg_name.lower() in ['cuda', 'experiment', 'test_batch_size', 'num_workers', 'real', 'clip_max_norm', 'save_dir', 'output']:
+                    continue
+                
+                # Only show if required, or if it doesn't have a default value in DEFAULT_VARS (meaning it's essential to provide)
+                is_required = arg_name in required_args
+                has_default = arg_name in getattr(interface_cls, 'DEFAULT_VARS', {})
+                
+                # If it's not required and has a default, skip it in simple mode
+                if not is_required and has_default:
+                    continue
+
             arg_lower = arg_name.lower()
             is_file = any(x in arg_lower for x in ['checkpoint', 'model', 'file', 'elic', 'codec', 'pth', 'pkl', 'weights'])
             is_dir = any(x in arg_lower for x in ['dir', 'dataset', 'folder', 'save'])
             if 'path' in arg_lower and not is_file and not is_dir:
                 is_dir = True
+            
             is_required = arg_name in required_args
             create_row(f"{arg_name}:", var, is_dir=is_dir, is_file=is_file, required=is_required)
 
@@ -470,35 +535,17 @@ class LICApp:
         threading.Thread(target=self.execution_thread, args=(gt_dir,), daemon=True).start()
 
     def execution_thread(self, gt_dir):
-        eval_env_path = self.eval_env_var.get().strip()
-        if not eval_env_path or not os.path.exists(eval_env_path):
-            target_path = eval_env_path if eval_env_path else os.path.join(ROOT_DIR, "envs/eval-env")
-            if messagebox.askyesno("Missing Evaluation Environment", 
-                                   f"The evaluation environment was not found at:\n{target_path}\n\n"
-                                   "Would you like to install it now? (Requires Conda)"):
-                self.log(f"[GUI] Starting installation of evaluation environment to: {target_path}\n")
-                try:
-                    spec = importlib.util.spec_from_file_location("create_env", os.path.join(ROOT_DIR, "create-env.py"))
-                    ce = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(ce)
-                    req_path = os.path.join(ROOT_DIR, "evaluation-requirements.txt")
-                    orig_print = builtins.print
-                    def thread_print(*args, **kwargs):
-                        msg = " ".join(map(str, args))
-                        end = kwargs.get('end', '\n')
-                        self.log(msg + end)
-                    builtins.print = thread_print
-                    ce.setup_conda_env(target_path, req_path, "3.10")
-                    builtins.print = orig_print
-                    self.eval_env_var.set(target_path)
-                    self.log(f"[GUI] Evaluation environment installed successfully.\n")
-                except Exception as e:
-                    self.log(f"[GUI ERROR] Failed to install evaluation environment: {e}\n")
-                    if not messagebox.askyesno("Installation Failed", "Evaluation environment setup failed. Continue anyway?"):
-                        self.root.after(0, self.finish_execution)
-                        return
+        base_env_dir = self.base_env_dir_var.get().strip()
+        if not base_env_dir or not os.path.exists(base_env_dir):
+            if messagebox.askyesno("Environment Folder Missing", 
+                                   f"The Environment Folder was not found at:\n{base_env_dir}\n\n"
+                                   "Would you like to try to create it? (This runs quick-start-env.py)"):
+                # Simplified trigger for quick-start if possible, or just fail
+                self.log(f"[GUI] Environment folder not found. Please run quick-start-env.py manually.\n")
+                self.root.after(0, self.finish_execution)
+                return
             else:
-                self.log("[GUI] Skipping evaluation environment installation. Evaluation step may use system Python.\n")
+                self.log("[GUI] Proceeding without base environment folder. Sub-environments may not be found.\n")
 
         output_base = os.path.expanduser(self.out_dir_var.get().strip())
         tasks = {}
@@ -513,10 +560,21 @@ class LICApp:
             model_out = os.path.abspath(os.path.join(output_base, model_name))
             os.makedirs(model_out, exist_ok=True)
             final_args["save_dir"] = model_out
+            
+            # Derive or use custom model environment path
+            user_model_env = config["env"].get().strip()
+            if user_model_env:
+                model_env = os.path.abspath(os.path.expanduser(user_model_env))
+            else:
+                model_env = os.path.join(base_env_dir, f"{model_name}-env")
+
+            if not os.path.exists(model_env):
+                self.log(f"[WARNING] Environment for {model_name} not found at {model_env}\n")
+
             tasks[model_name] = {
                 "task_name": model_name,
                 "directory": os.path.join(ROOT_DIR, config["workdir"].get()),
-                "env_path": config["env"].get() or None,
+                "env_path": model_env if os.path.exists(model_env) else None,
                 "arguments": final_args
             }
             eval_tasks.append({
@@ -525,19 +583,13 @@ class LICApp:
                 "input_dir": gt_dir
             })
 
-        eval_env_path = self.eval_env_var.get().strip()
-        gui_config = {
-            "testing": {
-                "tasks": tasks,
-                "evaluation": {
-                    "env_path": eval_env_path if eval_env_path and os.path.exists(eval_env_path) else "n/a",
-                    "tasks": eval_tasks
-                }
-            }
-        }
-        config_path = os.path.join(ROOT_DIR, "gui_arguments.json")
-        with open(config_path, 'w') as f:
-            json.dump(gui_config, f, indent=4)
+        # Derive eval environment path
+        eval_env_path = os.path.join(base_env_dir, "eval-env")
+        if not os.path.exists(eval_env_path):
+             self.log(f"[WARNING] Evaluation environment not found at {eval_env_path}\n")
+
+        # Track total run time per model
+        model_timings = {}
 
         original_print = builtins.print
         def custom_print(*args, **kwargs):
@@ -549,10 +601,8 @@ class LICApp:
         original_input = builtins.input
         def custom_input(prompt=""):
             self.log(f"{prompt} [Waiting for user popup...]\n")
-            response_bool = messagebox.askyesno("Dependency / Confirmation Required", prompt, parent=self.root)
-            response = "y" if response_bool else "n"
-            self.log(f"User selected: {response}\n")
-            return response
+            messagebox.showinfo("Wait", prompt)
+            return "y"
         builtins.input = custom_input
 
         orig_run = subprocess.run
@@ -585,13 +635,62 @@ class LICApp:
         subprocess.check_call = custom_check_call
 
         try:
-            dispatcher = Dispatcher(
-                arg_json_path=config_path,
-                run_test=True,
-                test_interfaces_path=os.path.join(ROOT_DIR, "Interfaces", "Testing-Interfaces")
-            )
-            dispatcher.run()
+            for model_name, task_info in tasks.items():
+                start_t = time.time()
+                self.log(f"\n[GUI] Starting Task: {model_name}...\n")
+                
+                # Create a temporary single-task config for the dispatcher
+                temp_config = {
+                    "testing": {
+                        "tasks": {model_name: task_info}
+                    }
+                }
+                temp_path = os.path.join(ROOT_DIR, f"gui_temp_{model_name}.json")
+                with open(temp_path, 'w') as f:
+                    json.dump(temp_config, f, indent=4)
+                
+                dispatcher = Dispatcher(
+                    arg_json_path=temp_path,
+                    run_test=True,
+                    test_interfaces_path=os.path.join(ROOT_DIR, "Interfaces", "Testing-Interfaces")
+                )
+                dispatcher.run()
+                
+                # Run evaluation for this specific model immediately to get metrics
+                this_eval_env = eval_env_path if os.path.exists(eval_env_path) else "n/a"
+                python_exec = sys.executable
+                if this_eval_env != "n/a":
+                    if os.path.isdir(os.path.join(this_eval_env, "Scripts")):
+                        python_exec = os.path.join(this_eval_env, "Scripts", "python.exe")
+                    else:
+                        python_exec = os.path.join(this_eval_env, "bin", "python3")
+                
+                eval_job = next(j for j in eval_tasks if j["task_name"] == model_name)
+                cmd = [
+                    python_exec, os.path.join(ROOT_DIR, "evaluation.py"),
+                    "--task_name", model_name,
+                    "--save_dir", eval_job["save_dir"],
+                    "--input_dir", eval_job["input_dir"]
+                ]
+                subprocess.run(cmd)
+                
+                elapsed = time.time() - start_t
+                model_timings[model_name] = elapsed
+                
+                # Update the metrics file with timing info
+                metrics_file = os.path.join(eval_job["save_dir"], f"{model_name}_metrics.json")
+                if os.path.exists(metrics_file):
+                    with open(metrics_file, 'r') as f:
+                        m_data = json.load(f)
+                    m_data["runtime_seconds"] = elapsed
+                    with open(metrics_file, 'w') as f:
+                        json.dump(m_data, f, indent=4)
+                
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+
             self.log("\n[GUI] All tasks completed successfully.\n")
+
         except Exception as e:
             self.log(f"\n[GUI ERROR] Dispatcher failed: {e}\n")
         finally:
@@ -625,14 +724,45 @@ class LICApp:
             self.metrics_model_sel.set(first_model)
             self.refresh_metrics_display()
 
+    def refresh_summary_report(self):
+        for item in self.summary_tree.get_children():
+            self.summary_tree.delete(item)
+            
+        for model_name, data in self.metrics_data.items():
+            avg = data.get("averages", {})
+            runtime = data.get("runtime_seconds", 0)
+            per_img = data.get("per_image_metrics", [])
+            
+            if not per_img: continue
+            
+            # Find best/worst based on PSNR
+            best = max(per_img, key=lambda x: x.get("psnr", 0))
+            worst = min(per_img, key=lambda x: x.get("psnr", 0))
+            
+            time_str = f"{runtime:.1f}s" if runtime < 60 else f"{runtime/60:.1f}m"
+            
+            self.summary_tree.insert("", tk.END, values=(
+                model_name,
+                avg.get("psnr"),
+                avg.get("bpp"),
+                best.get("image_name"),
+                best.get("psnr"),
+                worst.get("image_name"),
+                worst.get("psnr"),
+                time_str
+            ))
+
     def refresh_metrics_display(self, event=None):
         model_name = self.metrics_model_sel.get()
         if not model_name or model_name not in self.metrics_data:
             return
         data = self.metrics_data[model_name]
         avg = data.get("averages", {})
-        summary_text = f"PSNR: {avg.get('psnr', 'N/A')} dB | SSIM: {avg.get('ssim', 'N/A')} | LPIPS: {avg.get('lpips', 'N/A')} | BPP: {avg.get('bpp', 'N/A')}"
+        runtime = data.get("runtime_seconds", "N/A")
+        time_str = f"{runtime:.2f}s" if isinstance(runtime, (int, float)) else "N/A"
+        summary_text = f"PSNR: {avg.get('psnr', 'N/A')} dB | SSIM: {avg.get('ssim', 'N/A')} | LPIPS: {avg.get('lpips', 'N/A')} | BPP: {avg.get('bpp', 'N/A')} | Time: {time_str}"
         self.summary_label.config(text=summary_text)
+        
         for item in self.metrics_tree.get_children():
             self.metrics_tree.delete(item)
         for item in data.get("per_image_metrics", []):
@@ -643,6 +773,8 @@ class LICApp:
                 item.get("lpips"),
                 item.get("bpp")
             ))
+        
+        self.refresh_summary_report()
 
     def refresh_image_list(self):
         gt_dir = os.path.expanduser(self.gt_dir_var.get().strip())

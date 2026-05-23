@@ -252,7 +252,11 @@ class Dispatcher:
                 # 1. Resolve the evaluation environment
                 eval_env = eval_data.get("env_path", None)
                 if eval_env and eval_env != "n/a":
-                    python_exec = os.path.join(os.path.expanduser(eval_env), "bin", "python3")
+                    abs_eval_env = os.path.expanduser(eval_env)
+                    if os.path.isdir(os.path.join(abs_eval_env, "Scripts")):
+                        python_exec = os.path.join(abs_eval_env, "Scripts", "python.exe")
+                    else:
+                        python_exec = os.path.join(abs_eval_env, "bin", "python3")
                 else:
                     python_exec = sys.executable
 

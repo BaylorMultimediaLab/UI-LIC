@@ -39,7 +39,7 @@ class LICTCMTestInterface(BaseInterface):
     CLI_MAPPING = {
         "checkpoint": "--checkpoint",
         "data": "--data",
-        "save_dir": "--save_dir",
+        "rec_path": "--save_dir",
         "clip_max_norm": "--clip_max_norm",
         "N": "-N",          # <--- THIS IS CRITICAL
         "model": "--model", # <--- Add this if your script uses it
@@ -58,6 +58,10 @@ class LICTCMTestInterface(BaseInterface):
         for key in ["checkpoint", "data", "save_dir"]:
             if self.params.get(key):
                 self.params[key] = os.path.expanduser(self.params[key])
+
+        if self.params.get("save_dir"):
+            self.params["rec_path"] = os.path.join(self.params["save_dir"], "reconstruction")
+            os.makedirs(self.params["rec_path"], exist_ok=True)
 
     def execute(self):
         # Ensure output directory exists before running

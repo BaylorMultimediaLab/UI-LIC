@@ -63,13 +63,16 @@ class RwkvCompressTestInterface(BaseInterface):
         "qualities": "-q",
 
         "input_dir": "-i",
-        "save_dir": "-s",
-        "save_dir": "--save_dir",
+        "rec_path": "-s",
         "result": "-r",
     }
 
     def __init__(self, job_args=None, global_args=None):
         super().__init__(job_args, global_args)
+
+        if self.params.get("save_dir"):
+            self.params["rec_path"] = os.path.join(self.params["save_dir"], "reconstruction")
+            os.makedirs(self.params["rec_path"], exist_ok=True)
 
         # normalize cuda flag if passed in alternative form
         if "cuda" in self.params:

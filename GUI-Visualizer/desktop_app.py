@@ -2,6 +2,10 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import os
 import sys
+
+# Add parent directory to sys.path to allow importing from root
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import threading
 import importlib.util
 import inspect

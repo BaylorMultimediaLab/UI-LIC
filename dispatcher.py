@@ -3,6 +3,7 @@ import sys
 import json
 import time
 import argparse
+import subprocess
 import inspect
 import importlib.util
 import shutil
@@ -45,6 +46,34 @@ class Dispatcher:
                                 print(f"  -> Registered '{obj.TASK_NAME}' from {filename}")
                     except Exception as e:
                         print(f"  -> [WARNING] Failed to load {filename}: {e}")
+
+    def _validate_paths_interactive(self, args_dict):
+        # Keys that are almost always file system paths
+        path_keys = {
+            "dataset", "data", "input_dir", "input_dirs", 
+            "checkpoint", "checkpoints", "save_dir", "output_dir", 
+            "data_dir", "log_dir"
+        }
+        
+        for k, v in args_dict.items():
+            if k in path_keys and isinstance(v, str):
+                path = os.path.expanduser(v)
+                
+                # If it's a save/output directory, we can usually just create it
+                if "save" in k or "output" in k:
+                    if not os.path.exists(path):
+                        print(f" -> [INFO] Path '{k}' ('{path}') does not exist. Creating it.")
+                        os.makedirs(path, exist_ok=True)
+                
+                # If it's an input/dataset/checkpoint, it MUST exist
+                elif not os.path.exists(path):
+                    print(f"\n -> [WARNING] Path for '{k}' ('{path}') NOT FOUND.")
+                    new_path = input(f"    Please enter the correct path for '{k}' (or 'skip'): ").strip()
+                    if new_path.lower() != 'skip' and new_path != "":
+                        args_dict[k] = new_path
+                        # Recursive check on the new path
+                        self._validate_paths_interactive({k: new_path})
+        return args_dict
 
     def _verify_crop_sizes(self, data_dir, crop_size):
         if not data_dir or not os.path.isdir(data_dir) or not crop_size:
@@ -180,6 +209,10 @@ class Dispatcher:
                 clean_job_args = self._normalize_booleans(job_args)
                 clean_job_args = self._expand_paths(clean_job_args)
 
+                # Validate global args first, then job specific args
+                global_args = self._validate_paths_interactive(clean_global_args)
+                clean_job_args = self._validate_paths_interactive(clean_job_args)
+
                 InterfaceClass = self.registry[target_task_name]
                 interface_instance = InterfaceClass(job_args=clean_job_args, global_args=clean_global_args)            
                 
@@ -211,6 +244,45 @@ class Dispatcher:
                 except Exception as e:
                     print(f"\n  -> [ERROR] Execution of '{target_task_name}' crashed: {e}")
                     print("  -> Continuing to next job in the queue...")
+
+        # --- AUTOMATED EVALUATION STEP ---
+        if phase == "testing":
+            eval_data = phase_data.get("evaluation", {})
+            if eval_data and "tasks" in eval_data:
+                # 1. Resolve the evaluation environment
+                eval_env = eval_data.get("env_path", None)
+                if eval_env and eval_env != "n/a":
+                    python_exec = os.path.join(os.path.expanduser(eval_env), "bin", "python3")
+                else:
+                    python_exec = sys.executable
+
+                print("\n" + "="*60)
+                print(f"=== Executing Post-Test Evaluation (Env: {eval_env}) ===")
+                print("="*60)
+                
+                for job in eval_data["tasks"]:
+                    # Safely get required fields with defaults to prevent NoneType errors
+                    task_name = job.get("task_name")
+                    save_dir = job.get("save_dir")
+                    input_dir = job.get("input_dir")
+
+                    if not all([task_name, save_dir, input_dir]):
+                        print(f" -> [SKIP] Evaluation task missing required fields: {job}")
+                        continue
+
+                    print(f"\n--- Evaluating Task: {task_name} ---")
+                    
+                    cmd = [
+                        python_exec, "evaluation.py",
+                        "--task_name", str(task_name),
+                        "--save_dir", str(save_dir),
+                        "--input_dir", str(input_dir)
+                    ]
+                    
+                    try:
+                        subprocess.run(cmd, check=True)
+                    except subprocess.CalledProcessError as e:
+                        print(f" -> [ERROR] Evaluation script failed for {task_name}: {e}")
 
 
 def parse_args():

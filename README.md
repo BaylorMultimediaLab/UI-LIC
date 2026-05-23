@@ -44,6 +44,19 @@ python dispatcher.py --train --args_json my_config.json
 
 ---
 
+## System Prerequisites
+Before setting up your virtual environments, ensure your system has the necessary external libraries installed.
+
+### OS-Level Dependencies
+The evaluation pipeline relies on `ffmpeg` for video-based metric processing and frame manipulation. Since the Python `ffmpeg-python` package is merely a wrapper, you must have the `ffmpeg` binary installed on your host system:
+
+```bash
+# For Ubuntu/Debian based systems
+sudo apt-get update
+sudo apt-get install ffmpeg
+
+---
+
 ## Integrated Models
 
 The following models are integrated into the platform, each with a specialized interface to bridge their unique CLI requirements:

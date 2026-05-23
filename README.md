@@ -4,43 +4,76 @@ This repository provides a unified framework for managing, training, and testing
 
 ---
 
-## Getting Started
+## Core Workflow
 
-### 1. Environment Setup (`create-env.py`)
-Each LIC model often requires a specific environment with distinct dependencies. The `create-env.py` script automates the creation of these Conda environments.
+### 1. Environment Setup (`create-env.py` & `quick-start-env.py`)
+Each LIC model often requires a specific environment with distinct dependencies. 
+
+- **Individual Setup (`create-env.py`):** Use this to create an environment for a single model with custom settings.
+  ```bash
+  python create-env.py
+  ```
+- **Batch Setup (`quick-start-env.py`):** Use this to automatically create environments for ALL integrated models at once in a specified directory.
+  ```bash
+  python quick-start-env.py [base_path]
+  ```
+  This script uses the recommended Python versions and requirements files defined for each model automatically.
+
+### 2. Configuration Generation (`configure-jobs.py`)
+Instead of manually editing JSON files, use `configure-jobs.py` to interactively build your job queue.
+
+**What it does:**
+- Scans `Interfaces/` to find all registered models (e.g., StableCodec, ELIC).
+- Prompts for **Global Arguments** (shared across all tasks like `cuda`, `batch_size`).
+- Prompts for **Task-Specific Arguments** for each model you want to run.
+- Automatically handles argument aliases and provides default values.
+- Generates a valid `arguments.json` file ready for the dispatcher.
 
 **How to use:**
 ```bash
-python create-env.py
+# Start interactive configuration
+python configure-jobs.py
+
+# Options:
+# --train       : Configure training jobs
+# --test        : Configure testing/evaluation jobs
+# --output      : Specify custom output filename (default: arguments.json)
 ```
-When prompted:
-- **Environment path:** Enter the directory where you want the environment created (e.g., `StableCodec/training-testing-env`).
-- **Requirements path:** Point to the model's `requirements.txt` (e.g., `StableCodec/requirements.txt`).
-- **Python version:** Specify the version (defaults to 3.10 if left blank).
-
-The script will create the environment and install all dependencies via pip automatically.
-
-### 2. Configuration (`arguments.json`)
-The `arguments.json` file is the central brain of the platform. It allows you to define global settings and queue multiple tasks across different models.
-
-- **`global_arguments`**: Common parameters shared across all tasks (e.g., `learning_rate`, `batch_size`, `patch_size`, `cuda`).
-- **`tasks`**: A dictionary of specific jobs to run.
-  - `task_name`: Matches the registered interface name (e.g., `StableCodec`, `ELIC`).
-  - `directory`: The root folder of the model code.
-  - `env_path`: Relative path to the Conda environment to use for that task.
-  - `arguments`: Task-specific overrides or additions.
 
 ### 3. Running the Dispatcher (`dispatcher.py`)
-The `dispatcher.py` script parses your configuration and executes the tasks in sequence. It handles environment switching, directory management, and command construction automatically.
+The `dispatcher.py` script is the execution engine that processes the `arguments.json` queue.
+
+**What it does:**
+- **Environment Switching:** Automatically runs each task within its dedicated Conda environment.
+- **Path Validation:** Interactively verifies that all input datasets and checkpoints exist before starting.
+- **Safety Checks:** Verifies that dataset images meet the minimum `patch_size` requirements to prevent PyTorch dataloader crashes.
+- **Automated Evaluation:** After testing tasks finish, it automatically triggers `evaluation.py` to calculate final metrics and aggregate results.
 
 **How to use:**
 ```bash
-# Run the training queue defined in arguments.json
-python dispatcher.py --train
+# Execute the training and/or testing queue
+python dispatcher.py --train --test
 
-# Use a custom configuration file
+# Optional: Specify a custom configuration file
 python dispatcher.py --train --args_json my_config.json
 ```
+
+---
+
+## Technical Architecture
+
+### Unified Interfaces (`Interfaces/`)
+The `Interfaces/` directory contains the "bridge" logic for each model. Each interface file defines:
+- `TASK_NAME`: The identifier used in the JSON config.
+- `CLI_MAPPING`: Maps unified argument names to the model's specific CLI flags.
+- `REQUIRED_ARGS`: Ensures the dispatcher doesn't start a job with missing parameters.
+- `ALIASES`: Allows flexible naming (e.g., `data`, `dataset`, and `test_dataset` all map to the same parameter).
+
+### Evaluation Pipeline (`evaluation.py`)
+The dispatcher automatically hands off results to `evaluation.py`. This script handles:
+- Calculating PSNR, MS-SSIM, and BPP.
+- Managing YUV vs RGB conversions.
+- Aggregating results into structured reports in the `save-dir`.
 
 ---
 
@@ -54,6 +87,7 @@ The evaluation pipeline relies on `ffmpeg` for video-based metric processing and
 # For Ubuntu/Debian based systems
 sudo apt-get update
 sudo apt-get install ffmpeg
+```
 
 ---
 
@@ -65,53 +99,29 @@ The following models are integrated into the platform, each with a specialized i
 *Taming One-Step Diffusion for Extreme Image Compression (ICCV 2025)*
 - **Recommended Python Version:** 3.10
 - **Core Concept:** Uses a one-step diffusion process (SD-Turbo) combined with a dual-branch coding structure.
-- **Strength:** Exceptional visual realism at ultra-low bitrates (as low as 0.005 bpp) by leveraging generative priors.
-- **Workflow:** Typically involves a base training stage followed by GAN-based finetuning.
-- **Additional Files:** Requires installation of stable diffusion turbo https://huggingface.co/stabilityai/sd-turbo.
+- **Strength:** Exceptional visual realism at ultra-low bitrates (as low as 0.005 bpp).
 
 ### **ELIC**
 *Efficient Learned Image Compression with Context-Adaptive Masked Modeling*
 - **Recommended Python Version:** 3.10
-- **Core Concept:** A high-performance model utilizing unevenly masked modeling and spatial-channel context.
-- **Strength:** Highly efficient coding with state-of-the-art Rate-Distortion performance, balancing complexity and compression.
+- **Strength:** State-of-the-art Rate-Distortion performance, balancing complexity and compression.
 
 ### **DCVC-RT**
 *Deep Contextual Video Compression - Real Time*
 - **Recommended Python Version:** 3.12
-- **Core Concept:** Optimized for low-latency and real-time performance.
-- **Strength:** Excellent for scenarios requiring fast inference and high-quality I-frame (Intra) compression as a foundation for video tasks.
-- **Notable Additions:** We constructed a script to train the i-frame model for DCVC-RT as well as a script to test the compression for a single i-frame
-to evaluate DCVC-RT's image compression capabilites.
+- **Strength:** Optimized for low-latency and real-time performance. Foundation for video tasks.
 
 ### **LIC-TCM**
 *Learned Image Compression with Mixed Transformer-CNN Architectures*
 - **Recommended Python Version:** 3.10
-- **Core Concept:** Employs Transformers to capture long-range dependencies in the latent space.
-- **Strength:** Superior context modeling compared to traditional CNN-based approaches, leading to better compression of complex textures.
+- **Strength:** Superior context modeling for complex textures using Transformers.
 
 ### **LIC-HPCM**
 *Learned Image Compression with Hierarchical Progressive Context Modeling*
 - **Recommended Python Version:** 3.8
-- **Core Concept:** Combines different context modeling strategies to maximize parallelization during decoding.
-- **Strength:** Optimized for hardware acceleration and fast decoding without sacrificing significant compression efficiency.
-- **Required Actions:** Compile LIC-HPCM/src/entropy_models/entropy_coders/unbounded_rans through ./setup.sh
-  Compile LIC-HPCM/src/entropy_models through python setup.py build_ext --inplace
-- **Implementation Decisions:** Choose between two models [HPCM_Base/HPCM_Large]
+- **Strength:** Optimized for hardware acceleration and fast parallel decoding.
 
 ### **RwkvCompress**
 *Efficient Learned Image Compression via RWKV architecture*
 - **Recommended Python Version:** 3.10
-- **Core Concept:** Adapts the Receptance Weighted Key Value (RWKV) architecture—a linear-attention Transformer-RNN hybrid—to learn latent representations for image compression.
-- **Strength:** Achieves a unique balance between Transformer-level global dependency modeling and RNN-level computational efficiency. It provides scalable context modeling without the heavy quadratic memory cost associated with standard self-attention mechanisms.
-- **Workflow Notes:** 
-    - Training requires the compilation of custom CUDA extensions (`biwkv4`). 
-    - Ensure your system environment is configured with GCC-12 or similar to handle the CUDA kernel compilation successfully.
-    - The interface integrates seamlessly with the dispatcher, allowing for fine-tuned Rate-Distortion optimization via the Lagrangian parameter ($\lambda$).
-
----
-
-## Project Structure
-- `Interfaces/`: Contains the logic for translating unified arguments to model-specific CLI flags.
-- `base_interface.py`: The core class that handles command building and environment execution.
-- `dispatcher.py`: The entry point for running multi-task queues.
-- `[ModelName]/`: Original research codebases integrated as sub-modules.
+- **Strength:** Global dependency modeling with linear-attention computational efficiency.

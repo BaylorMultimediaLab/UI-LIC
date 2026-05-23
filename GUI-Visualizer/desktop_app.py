@@ -716,11 +716,31 @@ class LICApp:
 if __name__ == "__main__":
     root = tk.Tk()
     
-    # Simple standard scaling for 4K
+    # Environment-based scaling
+    scaling_factor = 2.0 # Default for Mac/Retina
+    
     try:
-        root.tk.call('tk', 'scaling', 2.0)
-    except:
-        pass
+        # Check if running in WSL
+        is_wsl = False
+        if sys.platform == "linux":
+            try:
+                with open("/proc/version", "r") as f:
+                    if "microsoft" in f.read().lower():
+                        is_wsl = True
+            except:
+                pass
+        
+        if is_wsl:
+            # WSL 4K usually needs much higher scaling (3.0 - 4.0)
+            scaling_factor = 3.5
+            print(f"[INFO] WSL detected, applying scaling factor: {scaling_factor}")
+        elif sys.platform == "darwin":
+            # Mac scaling is already good at 2.0
+            scaling_factor = 2.0
+            
+        root.tk.call('tk', 'scaling', scaling_factor)
+    except Exception as e:
+        print(f"[WARNING] Could not set scaling: {e}")
         
     app = LICApp(root)
     root.mainloop()

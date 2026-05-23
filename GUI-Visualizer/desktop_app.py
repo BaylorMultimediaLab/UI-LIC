@@ -214,9 +214,18 @@ class LICApp:
         self.out_dir_var = tk.StringVar(value=os.path.join(ROOT_DIR, "GUI-Visualizer/outputs"))
         ttk.Label(self.sidebar, text="Output Directory:", font=self.F_BASE).pack(anchor="w")
         out_frame = ttk.Frame(self.sidebar)
-        out_frame.pack(fill=tk.X, pady=(0, 30))
+        out_frame.pack(fill=tk.X, pady=(0, 20))
         ttk.Entry(out_frame, textvariable=self.out_dir_var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
         ttk.Button(out_frame, text="📂", width=4, command=lambda: self.browse_dir(self.out_dir_var)).pack(side=tk.LEFT, padx=(5,0))
+
+        # Add Evaluation Environment path field
+        default_eval_env = os.path.join(ROOT_DIR, "envs/eval-env")
+        self.eval_env_var = tk.StringVar(value=default_eval_env if os.path.exists(default_eval_env) else "")
+        ttk.Label(self.sidebar, text="Evaluation Env Path (eval-env):", font=self.F_BASE).pack(anchor="w")
+        eval_env_frame = ttk.Frame(self.sidebar)
+        eval_env_frame.pack(fill=tk.X, pady=(0, 30))
+        ttk.Entry(eval_env_frame, textvariable=self.eval_env_var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(eval_env_frame, text="📂", width=4, command=lambda: self.browse_dir(self.eval_env_var)).pack(side=tk.LEFT, padx=(5,0))
 
         ttk.Label(self.sidebar, text="2. Models", style='Header.TLabel').pack(anchor="w", pady=(0, 15))
 
@@ -237,9 +246,6 @@ class LICApp:
             self.model_listbox.insert(tk.END, name)
         self.model_listbox.pack(fill=tk.X, pady=(0, 20))
         self.model_listbox.bind("<<ListboxSelect>>", self.on_model_select)
-
-        self.auto_confirm_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(self.sidebar, text="Auto-confirm dependency installs", variable=self.auto_confirm_var).pack(anchor="w", pady=(0, 20))
 
         self.run_btn = ttk.Button(self.sidebar, text="RUN EVALUATION", style='Run.TButton', command=self.run_evaluation)
         self.run_btn.pack(fill=tk.X, pady=20)
@@ -474,6 +480,43 @@ class LICApp:
         threading.Thread(target=self.execution_thread, args=(gt_dir,), daemon=True).start()
 
     def execution_thread(self, gt_dir):
+        # 0. Check for Evaluation Environment
+        eval_env_path = self.eval_env_var.get().strip()
+        if not eval_env_path or not os.path.exists(eval_env_path):
+            target_path = eval_env_path if eval_env_path else os.path.join(ROOT_DIR, "envs/eval-env")
+            if messagebox.askyesno("Missing Evaluation Environment", 
+                                   f"The evaluation environment was not found at:\n{target_path}\n\n"
+                                   "Would you like to install it now? (Requires Conda)"):
+                self.log(f"[GUI] Starting installation of evaluation environment to: {target_path}\n")
+                try:
+                    # Dynamically load create-env.py logic
+                    spec = importlib.util.spec_from_file_location("create_env", os.path.join(ROOT_DIR, "create-env.py"))
+                    ce = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(ce)
+                    
+                    req_path = os.path.join(ROOT_DIR, "evaluation-requirements.txt")
+                    
+                    # Redirect stdout for the setup function (it uses print)
+                    orig_print = builtins.print
+                    def thread_print(*args, **kwargs):
+                        msg = " ".join(map(str, args))
+                        end = kwargs.get('end', '\n')
+                        self.log(msg + end)
+                    builtins.print = thread_print
+                    
+                    ce.setup_conda_env(target_path, req_path, "3.10")
+                    
+                    builtins.print = orig_print
+                    self.eval_env_var.set(target_path)
+                    self.log(f"[GUI] Evaluation environment installed successfully.\n")
+                except Exception as e:
+                    self.log(f"[GUI ERROR] Failed to install evaluation environment: {e}\n")
+                    if not messagebox.askyesno("Installation Failed", "Evaluation environment setup failed. Continue anyway?"):
+                        self.root.after(0, self.finish_execution)
+                        return
+            else:
+                self.log("[GUI] Skipping evaluation environment installation. Evaluation step may use system Python.\n")
+
         output_base = os.path.expanduser(self.out_dir_var.get().strip())
         
         # 1. Prepare Dispatcher config
@@ -509,11 +552,12 @@ class LICApp:
                 "input_dir": gt_dir
             })
 
+        eval_env_path = self.eval_env_var.get().strip()
         gui_config = {
             "testing": {
                 "tasks": tasks,
                 "evaluation": {
-                    "env_path": os.path.join(ROOT_DIR, "envs/eval-env") if os.path.exists(os.path.join(ROOT_DIR, "envs/eval-env")) else "n/a",
+                    "env_path": eval_env_path if eval_env_path and os.path.exists(eval_env_path) else "n/a",
                     "tasks": eval_tasks
                 }
             }
@@ -532,10 +576,14 @@ class LICApp:
         builtins.print = custom_print
 
         original_input = builtins.input
-        auto_confirm = self.auto_confirm_var.get()
         def custom_input(prompt=""):
-            response = "y" if auto_confirm else "n"
-            self.log(f"{prompt} [GUI Auto-respond: '{response}']\n")
+            self.log(f"{prompt} [Waiting for user popup...]\n")
+            # Show a yes/no dialog. Tkinter messageboxes are generally thread-safe 
+            # for display, but they block the calling thread (execution_thread) 
+            # until dismissed, which is the desired behavior for input().
+            response_bool = messagebox.askyesno("Dependency / Confirmation Required", prompt, parent=self.root)
+            response = "y" if response_bool else "n"
+            self.log(f"User selected: {response}\n")
             return response
         builtins.input = custom_input
 

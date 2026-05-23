@@ -179,11 +179,13 @@ class ConfigGenerator:
         print(f"Configuring Tasks [{phase.upper()}]")
         print("="*50)
         
+        eval_records = []
+
         registry = self.train_registry if phase == "training" else self.test_registry
         
         if not registry:
             print(f"No {phase} interfaces found! Skipping...")
-            return {}
+            return {}, []
             
         tasks = {}
         
@@ -227,6 +229,8 @@ class ConfigGenerator:
                 "arguments": {}
             }
             
+            
+
             interface_cls = registry[task_name]
             required_args = getattr(interface_cls, 'REQUIRED_ARGS', [])
             default_args = getattr(interface_cls, 'DEFAULT_VARS', {})
@@ -282,27 +286,61 @@ class ConfigGenerator:
                     for k in keys_to_remove:
                         del task_info["arguments"][k]
 
+            if phase == "testing":
+                # Robustly find the dataset path (check task args first, then globals)
+                ds_keys = ["dataset", "data", "input", "test_dataset"]
+                dataset_path = next((task_info["arguments"].get(k) for k in ds_keys if k in task_info["arguments"]), global_args.get("test_dataset"))
+                
+                eval_records.append({
+                    "task_name": task_key,
+                    "save_dir": task_info["arguments"].get("save_dir"),
+                    "input_dir": dataset_path 
+                })
+
             tasks[task_key] = task_info
             print(f"\nSuccessfully added {task_key} to job queue.")
             
-        return tasks
+        return tasks, eval_records
         
     def _configure_phase(self, phase):
         global_args = self.build_global_args(phase)
-        
+
         print("\n" + "="*50)
         print(f"JSON Optimization [{phase.upper()}]")
         print("="*50)
         print("You can automatically omit task arguments from the JSON if they are")
         print("identical to the global arguments. This keeps the JSON file much smaller.")
         omit_globals = input("Do you want to omit matching arguments from tasks? (y/N): ").strip().lower() == 'y'
-        
-        tasks = self.build_tasks(phase, global_args, omit_globals)
-        
-        return {
-            "global_arguments": global_args,
-            "tasks": tasks
-        }
+
+        tasks_result = self.build_tasks(phase, global_args, omit_globals)
+
+        # unpack
+        if phase == "testing":
+            tasks, eval_records = tasks_result
+            
+            # --- [NEW] INPUT FOR EVALUATION ENVIRONMENT ---
+            print("\n" + "="*50)
+            print("Configuring Evaluation Environment")
+            print("="*50)
+            eval_env = self._prompt("Enter evaluation environment path", default="~/eval-env", is_path=True)
+
+            evaluation = {
+                "env_path": eval_env,
+                "tasks": eval_records
+            }
+
+            return {
+                "global_arguments": global_args,
+                "tasks": tasks,
+                "evaluation": evaluation
+            }
+
+        else:
+            tasks, _ = tasks_result
+            return {
+                "global_arguments": global_args,
+                "tasks": tasks
+            }
 
     def generate(self, output_path="arguments.json"):
         final_config = {}

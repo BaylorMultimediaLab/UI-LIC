@@ -9,6 +9,9 @@ from PIL import Image, ImageTk
 import glob
 import builtins
 import queue
+import json
+import subprocess
+from dispatcher import Dispatcher
 
 try:
     from ctypes import windll
@@ -135,6 +138,7 @@ class LICApp:
         self.model_configs = {}
         self.log_queue = queue.Queue()
         self.selected_model_names = []
+        self.metrics_data = {} # {model_name: {averages: {}, per_image: []}}
         
         self.setup_ui()
         self.poll_log_queue()
@@ -263,12 +267,52 @@ class LICApp:
         self.model_selector.pack(side=tk.LEFT, padx=10)
         self.model_selector.bind("<<ComboboxSelected>>", self.update_comparison)
 
+        self.metrics_btn = ttk.Button(comp_controls, text="Inspect Metrics", command=self.show_current_metrics_popup)
+        self.metrics_btn.pack(side=tk.LEFT, padx=20)
+
         self.comp_canvas = ComparisonCanvas(self.compare_tab, bg="#1e1e1e", highlightthickness=0)
         self.comp_canvas.pack(fill=tk.BOTH, expand=True)
+
+        self.metrics_tab = ttk.Frame(self.main_area, padding=25)
+        self.main_area.add(self.metrics_tab, text="Metrics Report")
+        
+        self.setup_metrics_ui()
 
         self.log_area = tk.Text(self.sidebar, height=10, font=self.F_LOG, bg="#f4f4f4", fg="#333333")
         self.log_area.pack(fill=tk.BOTH, expand=True, pady=(25, 0))
         self.log_area.bind("<Key>", self.block_input)
+
+    def setup_metrics_ui(self):
+        self.metrics_top = ttk.Frame(self.metrics_tab)
+        self.metrics_top.pack(fill=tk.X, pady=(0, 20))
+        
+        ttk.Label(self.metrics_top, text="Model Performance Summary", style='Header.TLabel').pack(side=tk.LEFT)
+        
+        self.metrics_model_sel = ttk.Combobox(self.metrics_top, state="readonly", font=self.F_BASE)
+        self.metrics_model_sel.pack(side=tk.RIGHT, padx=10)
+        self.metrics_model_sel.bind("<<ComboboxSelected>>", self.refresh_metrics_display)
+        ttk.Label(self.metrics_top, text="View Model:", font=self.F_BASE).pack(side=tk.RIGHT)
+
+        self.summary_frame = ttk.LabelFrame(self.metrics_tab, text="Averages", padding=15)
+        self.summary_frame.pack(fill=tk.X, pady=(0, 20))
+        self.summary_label = ttk.Label(self.summary_frame, text="No evaluation data loaded.", font=self.F_BTN)
+        self.summary_label.pack()
+
+        table_frame = ttk.Frame(self.metrics_tab)
+        table_frame.pack(fill=tk.BOTH, expand=True)
+        
+        columns = ("image", "psnr", "ssim", "lpips", "bpp")
+        self.metrics_tree = ttk.Treeview(table_frame, columns=columns, show="headings")
+        
+        for col in columns:
+            self.metrics_tree.heading(col, text=col.upper())
+            self.metrics_tree.column(col, anchor="center", width=150)
+            
+        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.metrics_tree.yview)
+        self.metrics_tree.configure(yscrollcommand=scrollbar.set)
+        
+        self.metrics_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
     def block_input(self, event):
         is_modifier = event.state & (0x4 | 0x8 | 0x10 | 0x40)
@@ -318,6 +362,7 @@ class LICApp:
         self.selected_model_names = [self.model_listbox.get(i) for i in selected_indices]
         
         self.model_selector['values'] = self.selected_model_names
+        self.metrics_model_sel['values'] = self.selected_model_names
         
         for name in self.selected_model_names:
             self.build_model_config_ui(name)
@@ -379,13 +424,6 @@ class LICApp:
             messagebox.showerror("Error", f"Valid GT directory required.\nCurrent path: {gt_dir}")
             return
             
-        images = glob.glob(os.path.join(gt_dir, "*"))
-        image_files = [f for f in images if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-        
-        if not image_files:
-            messagebox.showerror("Error", "The selected directory does not contain any images (.png, .jpg, .jpeg).")
-            return
-
         self.run_btn.config(state=tk.DISABLED)
         self.progress.start()
         
@@ -394,100 +432,169 @@ class LICApp:
     def execution_thread(self, gt_dir):
         output_base = os.path.expanduser(self.out_dir_var.get().strip())
         
+        # 1. Prepare Dispatcher config
+        tasks = {}
+        eval_tasks = []
+        
         for model_name in self.selected_model_names:
-            self.log(f"--- Starting {model_name} ---\n")
             config = self.model_configs[model_name]
-            interface_cls = self.registry[model_name]
-            
             final_args = {k: v.get() for k, v in config["args"].items()}
             
+            # Map input
+            interface_cls = self.registry[model_name]
             data_keys = ['input', 'input_dir', 'data', 'dataset']
             target_key = next((k for k in data_keys if k in interface_cls.REQUIRED_ARGS or k in getattr(interface_cls, 'DEFAULT_VARS', {})), "dataset")
             final_args[target_key] = gt_dir
             
-            model_out = os.path.join(output_base, model_name)
+            model_out = os.path.abspath(os.path.join(output_base, model_name))
             os.makedirs(model_out, exist_ok=True)
-            if model_name == "LIC-HPCM": final_args["save_dir"] = model_out
-            elif model_name == "StableCodec":
-                final_args["rec_path"] = model_out
-                final_args["bin_path"] = os.path.join(model_out, "bins")
-            elif model_name == "DCVC-RT": final_args["save_dir"] = model_out
-            elif model_name == "ELIC": final_args["experiment"] = f"gui_eval_{model_name}"
-            elif model_name == "RwkvCompress": final_args["output_dir"] = model_out
+            
+            # Interface handles save_dir internal splitting
+            final_args["save_dir"] = model_out
 
-            try:
-                import subprocess as sp_module
-                orig_run = sp_module.run
-                orig_check_call = sp_module.check_call
+            tasks[model_name] = {
+                "task_name": model_name,
+                "directory": os.path.join(ROOT_DIR, config["workdir"].get()),
+                "env_path": config["env"].get() or None,
+                "arguments": final_args
+            }
+            
+            eval_tasks.append({
+                "task_name": model_name,
+                "save_dir": model_out,
+                "input_dir": gt_dir
+            })
 
-                def streaming_executor(cmd, **kwargs):
-                    kwargs.pop('check', None)
-                    kwargs.pop('capture_output', None)
-                    kwargs['stdout'] = sp_module.PIPE
-                    kwargs['stderr'] = sp_module.STDOUT
-                    kwargs['text'] = True
-                    kwargs['bufsize'] = 1
-                    kwargs['universal_newlines'] = True
-                    
-                    process = sp_module.Popen(cmd, **kwargs)
-                    if process.stdout:
-                        for line in process.stdout:
-                            self.log(line)
-                    return process.wait()
+        gui_config = {
+            "testing": {
+                "tasks": tasks,
+                "evaluation": {
+                    "env_path": os.path.join(ROOT_DIR, "envs/eval-env") if os.path.exists(os.path.join(ROOT_DIR, "envs/eval-env")) else "n/a",
+                    "tasks": eval_tasks
+                }
+            }
+        }
+        
+        config_path = os.path.join(ROOT_DIR, "gui_arguments.json")
+        with open(config_path, 'w') as f:
+            json.dump(gui_config, f, indent=4)
 
-                def custom_check_call(cmd, *args, **kwargs):
-                    ret = streaming_executor(cmd, **kwargs)
-                    if ret != 0: raise sp_module.CalledProcessError(ret, cmd)
-                    return 0
+        # 2. Setup Log Redirection & Monkey-patching
+        original_print = builtins.print
+        def custom_print(*args, **kwargs):
+            msg = " ".join(map(str, args))
+            end = kwargs.get('end', '\n')
+            self.log(msg + end)
+        builtins.print = custom_print
 
-                def custom_run(cmd, *args, **kwargs):
-                    ret = streaming_executor(cmd, **kwargs)
-                    return sp_module.CompletedProcess(cmd, ret)
+        original_input = builtins.input
+        auto_confirm = self.auto_confirm_var.get()
+        def custom_input(prompt=""):
+            response = "y" if auto_confirm else "n"
+            self.log(f"{prompt} [GUI Auto-respond: '{response}']\n")
+            return response
+        builtins.input = custom_input
 
-                sp_module.run = custom_run
-                sp_module.check_call = custom_check_call
+        # Monkey-patch subprocess to capture model output
+        orig_run = subprocess.run
+        orig_check_call = subprocess.check_call
 
-                original_print = builtins.print
-                def custom_print(*args, **kwargs):
-                    msg = " ".join(map(str, args))
-                    end = kwargs.get('end', '\n')
-                    self.log(msg + end)
-                builtins.print = custom_print
-                
-                original_input = builtins.input
-                auto_confirm = self.auto_confirm_var.get()
-                def custom_input(prompt=""):
-                    response = "y" if auto_confirm else "n"
-                    self.log(f"{prompt} [GUI Auto-respond: '{response}']\n")
-                    return response
-                builtins.input = custom_input
-                
-                interface = interface_cls(job_args=final_args)
-                interface.WORKING_DIR = os.path.join(ROOT_DIR, config["workdir"].get())
-                if config["env"].get():
-                    interface.ENV_PATH = config["env"].get()
-                
-                interface.execute()
-                
-                sp_module.run = orig_run
-                sp_module.check_call = orig_check_call
-                builtins.print = original_print
-                builtins.input = original_input
-                self.log(f"[SUCCESS] {model_name} finished.\n")
-            except Exception as e:
-                self.log(f"[ERROR] {model_name} failed: {e}\n")
-                sp_module.run = orig_run
-                sp_module.check_call = orig_check_call
-                builtins.print = original_print
-                builtins.input = original_input
+        def streaming_executor(cmd, **kwargs):
+            # Ensure output is captured
+            kwargs.pop('check', None)
+            kwargs.pop('capture_output', None)
+            kwargs['stdout'] = subprocess.PIPE
+            kwargs['stderr'] = subprocess.STDOUT
+            kwargs['text'] = True
+            kwargs['bufsize'] = 1
+            kwargs['universal_newlines'] = True
+            
+            process = subprocess.Popen(cmd, **kwargs)
+            if process.stdout:
+                for line in process.stdout:
+                    self.log(line)
+            return process.wait()
+
+        def custom_check_call(cmd, *args, **kwargs):
+            ret = streaming_executor(cmd, **kwargs)
+            if ret != 0: raise subprocess.CalledProcessError(ret, cmd)
+            return 0
+
+        def custom_run(cmd, *args, **kwargs):
+            ret = streaming_executor(cmd, **kwargs)
+            return subprocess.CompletedProcess(cmd, ret)
+
+        subprocess.run = custom_run
+        subprocess.check_call = custom_check_call
+
+        # 3. Execute via Dispatcher
+        try:
+            dispatcher = Dispatcher(
+                arg_json_path=config_path,
+                run_test=True,
+                test_interfaces_path=os.path.join(ROOT_DIR, "Interfaces", "Testing-Interfaces")
+            )
+            dispatcher.run()
+            self.log("\n[GUI] All tasks completed successfully.\n")
+        except Exception as e:
+            self.log(f"\n[GUI ERROR] Dispatcher failed: {e}\n")
+        finally:
+            builtins.print = original_print
+            builtins.input = original_input
+            subprocess.run = orig_run
+            subprocess.check_call = orig_check_call
 
         self.root.after(0, self.finish_execution)
 
     def finish_execution(self):
         self.progress.stop()
         self.run_btn.config(state=tk.NORMAL)
+        self.load_metrics()
         self.refresh_image_list()
         messagebox.showinfo("Done", "Evaluation complete.")
+
+    def load_metrics(self):
+        output_base = os.path.expanduser(self.out_dir_var.get().strip())
+        self.metrics_data = {}
+        
+        for model_name in self.selected_model_names:
+            metrics_file = os.path.join(output_base, model_name, f"{model_name}_metrics.json")
+            if os.path.exists(metrics_file):
+                try:
+                    with open(metrics_file, 'r') as f:
+                        self.metrics_data[model_name] = json.load(f)
+                except Exception as e:
+                    self.log(f"[ERROR] Failed to load metrics for {model_name}: {e}\n")
+        
+        if self.metrics_data:
+            first_model = list(self.metrics_data.keys())[0]
+            self.metrics_model_sel.set(first_model)
+            self.refresh_metrics_display()
+
+    def refresh_metrics_display(self, event=None):
+        model_name = self.metrics_model_sel.get()
+        if not model_name or model_name not in self.metrics_data:
+            return
+            
+        data = self.metrics_data[model_name]
+        
+        # Update Summary
+        avg = data.get("averages", {})
+        summary_text = f"PSNR: {avg.get('psnr', 'N/A')} dB | SSIM: {avg.get('ssim', 'N/A')} | LPIPS: {avg.get('lpips', 'N/A')} | BPP: {avg.get('bpp', 'N/A')}"
+        self.summary_label.config(text=summary_text)
+        
+        # Update Table
+        for item in self.metrics_tree.get_children():
+            self.metrics_tree.delete(item)
+            
+        for item in data.get("per_image_metrics", []):
+            self.metrics_tree.insert("", tk.END, values=(
+                item.get("image_name"),
+                item.get("psnr"),
+                item.get("ssim"),
+                item.get("lpips"),
+                item.get("bpp")
+            ))
 
     def refresh_image_list(self):
         gt_dir = os.path.expanduser(self.gt_dir_var.get().strip())
@@ -506,16 +613,20 @@ class LICApp:
         if not selected_img or not model_name: return
         
         gt_path = os.path.join(gt_dir, selected_img)
-        model_out = os.path.join(out_base, model_name)
+        model_out = os.path.join(out_base, model_name, "reconstruction")
+        if not os.path.exists(model_out):
+            model_out = os.path.join(out_base, model_name) # Fallback
         
-        # Get the name without extension (e.g., "000000000724")
         base_name = os.path.splitext(selected_img)[0]
         
         found = None
         if os.path.exists(model_out):
-            # Look for any file in model_out that starts with our base_name
             for f in os.listdir(model_out):
                 if f.startswith(base_name) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    found = os.path.join(model_out, f)
+                    break
+                # Also try without prefix if needed, or exact match
+                if f == selected_img:
                     found = os.path.join(model_out, f)
                     break
 
@@ -525,6 +636,54 @@ class LICApp:
         else:
             self.comp_canvas.set_images(gt_path, None) 
             self.log(f"[Viewer] Warning: No recon found for {base_name} in {model_name}.\n")
+
+    def show_current_metrics_popup(self):
+        selected_img = self.img_selector.get()
+        model_name = self.model_selector.get()
+        
+        if not selected_img or not model_name:
+            messagebox.showwarning("Warning", "Please select an image and model first.")
+            return
+            
+        if model_name not in self.metrics_data:
+            messagebox.showinfo("Info", "No metrics available. Please run evaluation first.")
+            return
+            
+        data = self.metrics_data[model_name]
+        img_metrics = None
+        for item in data.get("per_image_metrics", []):
+            if item.get("image_name") == selected_img or item.get("image_name").startswith(os.path.splitext(selected_img)[0]):
+                img_metrics = item
+                break
+        
+        popup = tk.Toplevel(self.root)
+        popup.title(f"Metrics: {selected_img} ({model_name})")
+        popup.geometry("500x400")
+        popup.transient(self.root)
+        
+        frame = ttk.Frame(popup, padding=30)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        ttk.Label(frame, text=f"Image: {selected_img}", style='Header.TLabel').pack(pady=(0, 20))
+        
+        avg = data.get("averages", {})
+        
+        def add_metric(name, value, avg_val):
+            row = ttk.Frame(frame)
+            row.pack(fill=tk.X, pady=10)
+            ttk.Label(row, text=f"{name}:", font=self.F_BTN, width=10).pack(side=tk.LEFT)
+            ttk.Label(row, text=str(value), font=self.F_BTN, foreground="#d9534f").pack(side=tk.LEFT)
+            ttk.Label(row, text=f" (Model Avg: {avg_val})", font=self.F_BASE).pack(side=tk.LEFT)
+
+        if img_metrics:
+            add_metric("PSNR", img_metrics.get("psnr"), avg.get("psnr"))
+            add_metric("SSIM", img_metrics.get("ssim"), avg.get("ssim"))
+            add_metric("LPIPS", img_metrics.get("lpips"), avg.get("lpips"))
+            add_metric("BPP", img_metrics.get("bpp"), avg.get("bpp"))
+        else:
+            ttk.Label(frame, text="Specific metrics for this image not found in the report.", wraplength=400).pack()
+
+        ttk.Button(frame, text="Close", command=popup.destroy).pack(pady=20)
 
 if __name__ == "__main__":
     root = tk.Tk()

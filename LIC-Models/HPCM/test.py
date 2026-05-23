@@ -154,7 +154,7 @@ def test(args):
             os.makedirs(bitstream_dir, exist_ok=True)
             
             # Save strings and shape to a .pt file
-            bitstream_path = os.path.join(bitstream_dir, f"bits_{img_name.rsplit('.', 1)[0]}.pt")
+            bitstream_path = os.path.join(bitstream_dir, f"{img_name.rsplit('.', 1)[0]}.pt")
             
             torch.save({
                 "strings": out_enc["strings"],
@@ -176,10 +176,10 @@ def test(args):
             x_hat = crop(out_dec["x_hat"], (h,w))
             
             # --- ADDED FOR SAVING IMAGE ---
-            recon_dir = os.path.join(args.save_dir, "reconstruction")
+            recon_dir = os.path.join(args.save_dir, "reconstructions")
             os.makedirs(recon_dir, exist_ok=True)
 
-            out_path = os.path.join(recon_dir, f"rec_{img_name}")
+            out_path = os.path.join(recon_dir, f"{img_name}")
             
         
             # Clamp between 0 and 1 just in case the network predicted slightly out-of-bounds pixel values

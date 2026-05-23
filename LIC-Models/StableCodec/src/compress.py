@@ -26,22 +26,29 @@ def preprocess_image(image_path, transform):
     return image_tensor
 
 
-def compress_one_image(net, bin_path, ori_h, ori_w, img_name, x):
+def compress_one_image(net, bin_path, ori_h, ori_w, fname, x):
     with torch.no_grad():
         output_dict = net.compress(x)
     shape = output_dict["shape"]
     if not os.path.exists(bin_path): os.makedirs(bin_path)
-    output = os.path.join(bin_path, img_name)
-    with Path(output).open("wb") as f:
+    
+    # Save as .pt file with the base name (e.g., kodim01.pt)
+    output = os.path.join(bin_path, f"{fname}.pt")
+    with open(output, "wb") as f: 
         write_body(f, shape, output_dict["strings"])
-    size = filesize(output)
+    
+    # Calculate BPP
+    size = os.path.getsize(output)
     bpp = float(size) * 8 / (ori_h * ori_w)
     return bpp
 
 
-def decompress_one_image(net, bin_path, ori_h, ori_w, img_name, prompt):
-    output = os.path.join(bin_path, img_name)
-    with Path(output).open("rb") as f:
+def decompress_one_image(net, bin_path, ori_h, ori_w, fname, prompt):
+    # Match the logic in compress_one_image
+    output = os.path.join(bin_path, f"{fname}.pt")
+    
+    # Use standard open instead of Path(output).open()
+    with open(output, "rb") as f:
         strings, shape = read_body(f)
     with torch.no_grad():
         out_img = net.decompress(strings, shape, prompt)
@@ -87,11 +94,11 @@ def main(args):
     print(f'\nFind {str(len(images))} images in {args.img_path}\n')
     
     for img_path in images:
-
         print('[Processing]', img_path)
         (path, name) = os.path.split(img_path)
-        fname, ext = os.path.splitext(name)
-        outf = os.path.join(args.rec_path, fname+'.png')
+        fname, ext = os.path.splitext(name) # fname is now "kodim01"
+        
+        outf = os.path.join(args.rec_path, f"{fname}.png")
 
         img = preprocess_image(img_path, transform).cuda().unsqueeze(0)
         ori_h, ori_w = img.shape[2:]

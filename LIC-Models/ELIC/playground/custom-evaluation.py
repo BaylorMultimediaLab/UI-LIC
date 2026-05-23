@@ -103,11 +103,11 @@ def main():
                 base_name = os.path.splitext(img_name)[0]
                 
                 # Save Bitstream
-                bit_file = os.path.join(bin_path, f"bits_{base_name}.pt")
+                bit_file = os.path.join(bin_path, f"{base_name}.pt")
                 torch.save({"strings": out_enc["strings"], "shape": out_enc["shape"]}, bit_file)
                 
                 # Save Reconstruction
-                rec_file = os.path.join(rec_path, f"rec_{img_name}")
+                rec_file = os.path.join(rec_path, f"{img_name}")
                 save_image(x_hat.clamp(0.0, 1.0), rec_file)
             # ---------------------------------------------------
 

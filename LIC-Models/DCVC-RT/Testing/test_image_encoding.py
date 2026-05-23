@@ -71,6 +71,9 @@ def process_image(img_path, net, lpips_fn, args):
     img = Image.open(img_path).convert('RGB')
     x = transforms.ToTensor()(img).unsqueeze(0).to(args.device)
     
+    # Get base filename (e.g., 'kodim01')
+    base_name = os.path.splitext(os.path.basename(img_path))[0]
+    
     if args.device == "cuda":
         x = x.to(torch.float16)
 
@@ -83,13 +86,8 @@ def process_image(img_path, net, lpips_fn, args):
         start = time.time()
         encoded = net.compress(x_padded, args.qp)
 
-        img_name = os.path.splitext(os.path.basename(img_path))[0]
-
-        bin_file = os.path.join(
-            args.bin_path,
-            f"{img_name}_qp{args.qp}.bin"
-        )
-        
+        # Save Bitstream as normalized name (e.g., kodim01.bin)
+        bin_file = os.path.join(args.bin_path, f"{base_name}.bin")
         with open(bin_file, "wb") as f:
             f.write(encoded["bit_stream"])
 
@@ -99,7 +97,6 @@ def process_image(img_path, net, lpips_fn, args):
         }
 
         decoded = net.decompress(encoded["bit_stream"], sps, args.qp)        
-        
         end = time.time()
 
     # --- Unpad and Clamp ---
@@ -114,14 +111,12 @@ def process_image(img_path, net, lpips_fn, args):
     bpp = len(encoded['bit_stream']) * 8 / (pic_height * pic_width)
     inference_time = (end - start) * 1000
     
-    # 1. PSNR & MS-SSIM (Expecting NumPy 0-255)
     rgb_orig = (x.squeeze(0).cpu().float().numpy() * 255).round()
     rgb_rec = (recon_clamped.squeeze(0).cpu().float().numpy() * 255).round()
     
     psnr = calc_psnr(rgb_orig, rgb_rec)
     msssim = calc_msssim_rgb(rgb_orig, rgb_rec)
     
-    # 2. LPIPS (Expecting Tensors scaled between [-1, 1])
     lpips_val = 0.0
     if lpips_fn is not None:
         with torch.no_grad():
@@ -129,16 +124,12 @@ def process_image(img_path, net, lpips_fn, args):
             recon_lpips = recon_clamped.float() * 2.0 - 1.0
             lpips_val = lpips_fn(x_lpips, recon_lpips).item()
 
-    # 3. VMAF (Via FFmpeg)
     vmaf_val = calculate_vmaf(img_path, recon_img)
 
-    print(f"[{os.path.basename(img_path)}] BPP: {bpp:.4f} | PSNR: {psnr:.2f} | MS-SSIM: {msssim:.4f} | VMAF: {vmaf_val:.2f} | LPIPS: {lpips_val:.4f} | Time: {inference_time:.0f}ms")
+    print(f"[{base_name}] BPP: {bpp:.4f} | PSNR: {psnr:.2f} | MS-SSIM: {msssim:.4f} | VMAF: {vmaf_val:.2f} | LPIPS: {lpips_val:.4f}")
     
-    # --- Save Decoded Image ---
-    base_name = os.path.basename(img_path)
-    name, _ = os.path.splitext(base_name)
-
-    out_path = os.path.join(args.rec_path, f"{name}_q{args.qp}_bpp{bpp:.3f}_psnr{psnr:.2f}.png")
+    # --- Save Decoded Image as normalized name (e.g., kodim01.png) ---
+    out_path = os.path.join(args.rec_path, f"{base_name}.png")
     recon_img.save(out_path)
 
     return bpp, psnr, msssim, vmaf_val, lpips_val, inference_time

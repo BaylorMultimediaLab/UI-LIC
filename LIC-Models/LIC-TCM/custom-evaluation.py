@@ -64,6 +64,9 @@ def parse_args(argv):
     parser.add_argument("--checkpoint", type=str, help="Path to a checkpoint")
     parser.add_argument("--data", type=str, help="Path to dataset")
     parser.add_argument("--real", action="store_true", default=True)
+
+    parser.add_argument("-N", type=int, default=128, help="Number of channels")
+    parser.add_argument("--model", type=str, default="bmshj2018-factorized", help="Model architecture")
     
     # --- ADDED: The save directory argument ---
     parser.add_argument("--save_dir", type=str, default=None, help="Directory to save bitstreams and decoded images")
@@ -85,7 +88,7 @@ def main(argv):
             
     device = 'cuda:0' if args.cuda else 'cpu'
     
-    net = TCM(config=[2,2,2,2,2,2], head_dim=[8, 16, 32, 32, 16, 8], drop_path_rate=0.0, N=128, M=320)
+    net = TCM(config=[2,2,2,2,2,2], head_dim=[8, 16, 32, 32, 16, 8], drop_path_rate=0.0, N=args.N, M=320)
     net = net.to(device)
     net.eval()
     
@@ -137,12 +140,12 @@ def main(argv):
                 if args.save_dir:
                     base_name = os.path.splitext(img_name)[0]
                     
-                    # 1. Save Bitstream
-                    bit_path = os.path.join(bitstream_dir, f"bits_{base_name}.pt")
+                    # Save Bitstream (Normalized: kodim01.pt)
+                    bit_path = os.path.join(bitstream_dir, f"{base_name}.pt")
                     torch.save({"strings": out_enc["strings"], "shape": out_enc["shape"]}, bit_path)
                     
-                    # 2. Save Decoded Image
-                    rec_path = os.path.join(recon_dir, f"rec_{base_name}.png")
+                    # Save Decoded Image (Normalized: kodim01.png)
+                    rec_path = os.path.join(recon_dir, f"{base_name}.png")
                     save_image(out_dec["x_hat"].clamp(0.0, 1.0), rec_path)
                 # -----------------------
 
@@ -181,9 +184,9 @@ def main(argv):
                 # --- SAVE RECONSTRUCTION (Forward Mode) ---
                 if args.save_dir:
                     base_name = os.path.splitext(img_name)[0]
-                    rec_path = os.path.join(recon_dir, f"rec_{base_name}.png")
+                    # Normalized: kodim01.png
+                    rec_path = os.path.join(recon_dir, f"{base_name}.png")
                     save_image(out_net["x_hat"].clamp(0.0, 1.0), rec_path)
-                # ------------------------------------------
 
                 print(f'{img_name} | PSNR: {compute_psnr(x, out_net["x_hat"]):.2f}dB | MS-SSIM: {compute_msssim(x, out_net["x_hat"]):.2f}dB | Bit-rate: {compute_bpp(out_net):.3f}bpp')
                 PSNR += compute_psnr(x, out_net["x_hat"])

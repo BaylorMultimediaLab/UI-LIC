@@ -159,36 +159,45 @@ class LICApp:
     def calculate_scale_factor(self):
         """Calculate scaling factor with more aggressive heuristics for 4K."""
         try:
-            # Try to get screen width to guess scaling if DPI detection fails
+            # Try to get screen width
             sw = self.root.winfo_screenwidth()
+            sh = self.root.winfo_screenheight()
             
             # Manual override via env var if needed (e.g. GUI_SCALE=2.0)
             env_scale = os.environ.get("GUI_SCALE")
             if env_scale:
+                print(f"[DEBUG] Using manual GUI_SCALE: {env_scale}")
                 return float(env_scale)
 
-            # Heuristic: If resolution is 4k (approx 3840 wide)
-            if sw >= 3000:
-                factor = 2.5
+            # Aggressive Heuristic for 4K and beyond
+            if sw >= 3800:
+                factor = 3.5  # Boosted from 2.5
+            elif sw >= 3000:
+                factor = 3.0
             elif sw >= 2500:
-                factor = 2.0
+                factor = 2.5
             elif sw >= 1900:
-                factor = 1.25
+                factor = 1.5
             else:
                 factor = 1.0
 
-            # Also check DPI as a fallback/supplement
+            # Also check DPI
             dpi = self.root.winfo_fpixels('1i')
             dpi_factor = dpi / 96.0
             
             final_factor = max(factor, dpi_factor)
             
+            print(f"[DEBUG] Detected Resolution: {sw}x{sh}")
+            print(f"[DEBUG] Detected DPI: {dpi}")
+            print(f"[DEBUG] Calculated Scale Factor: {final_factor}")
+            
             # Set Tk's internal scaling
             self.root.tk.call('tk', 'scaling', (96 * final_factor) / 72.0)
             
             return final_factor
-        except Exception:
-            return 1.5 if getattr(self, 'is_high_res', False) else 1.0
+        except Exception as e:
+            print(f"[DEBUG] Scaling detection error: {e}")
+            return 2.0 # Default to high scale if we fail on high-res
 
     def setup_geometry(self):
         """Set window size based on screen resolution."""
@@ -200,26 +209,30 @@ class LICApp:
         height = int(screen_h * 0.9)
         
         # Clamp to reasonable values
-        width = max(1200, min(width, int(2200 * self.scale_factor)))
-        height = max(800, min(height, int(1400 * self.scale_factor)))
+        width = max(1200, min(width, int(2500 * self.scale_factor)))
+        height = max(800, min(height, int(1600 * self.scale_factor)))
         
         self.root.geometry(f"{width}x{height}")
 
     def apply_styles(self):
         style = ttk.Style()
+        # 'clam' is often better for scaling but 'default' might be safer for fonts
         if 'clam' in style.theme_names():
             style.theme_use('clam')
 
-        # Increased base font sizes for 4K
-        self.F_BASE = ("sans-serif", int(15 * self.scale_factor))
-        self.F_HEAD = ("sans-serif", int(20 * self.scale_factor), "bold")
-        self.F_BTN  = ("sans-serif", int(15 * self.scale_factor), "bold")
-        self.F_RUN  = ("sans-serif", int(24 * self.scale_factor), "bold")
-        self.F_LOG  = ("monospace", int(13 * self.scale_factor))
+        # Robust font families for Linux/WSL/Windows
+        font_family = "Helvetica" if sys.platform != 'linux' else "DejaVu Sans"
 
-        p_small = int(6 * self.scale_factor)
-        p_med = int(12 * self.scale_factor)
-        p_large = int(25 * self.scale_factor)
+        # Significantly increased base font sizes for 4K
+        self.F_BASE = (font_family, int(18 * self.scale_factor)) # Boosted from 15
+        self.F_HEAD = (font_family, int(24 * self.scale_factor), "bold") # Boosted from 20
+        self.F_BTN  = (font_family, int(18 * self.scale_factor), "bold")
+        self.F_RUN  = (font_family, int(32 * self.scale_factor), "bold") # Boosted from 24
+        self.F_LOG  = ("monospace", int(14 * self.scale_factor))
+
+        p_small = int(8 * self.scale_factor)
+        p_med = int(16 * self.scale_factor)
+        p_large = int(30 * self.scale_factor)
 
         style.configure('.', font=self.F_BASE)
         style.configure('TLabel', font=self.F_BASE)

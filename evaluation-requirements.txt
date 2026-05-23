@@ -1,0 +1,22 @@
+# --- Core Deep Learning (Matches your model environment) ---
+torch
+torchvision
+
+# --- Quality Metrics ---
+# PIQ contains implementations for PSNR, SSIM, VMAF, and LPIPS
+piq
+# Optional: some specific evaluation scripts look for the raw LPIPS repo
+lpips
+
+# --- Image Processing ---
+Pillow
+numpy
+scipy
+scikit-image
+
+# --- Video/Bitstream Utilities ---
+ffmpeg-python
+tqdm
+
+# --- Misc ---
+pyyaml

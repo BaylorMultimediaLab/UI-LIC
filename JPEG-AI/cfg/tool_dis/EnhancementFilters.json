@@ -1,4 +1,0 @@
-{
-    "!include": ["anchor.json"],
-    "!exclude": ["../tools/EnhancementFilters.json"]
-}

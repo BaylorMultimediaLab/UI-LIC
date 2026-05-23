@@ -3,8 +3,22 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+testing-training-enviornment
 # C extensions
 *.so
+
+data
+
+testing-training-env
+training-testing-env
+
+experiments
+runs
+
+# StableCodec ELIC model
+elic_official.pth
+
+arguments.json
 
 # Distribution / packaging
 .Python
@@ -25,6 +39,13 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+
+*.pth.tar
+*.pt
+*.bin
+**/output/
+**/checkpoints/
+*.tfevents*
 
 # PyInstaller
 #   Usually these files are written by a python script from a template

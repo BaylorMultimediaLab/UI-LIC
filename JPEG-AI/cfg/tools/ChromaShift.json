@@ -1,7 +1,0 @@
-{
-    "color_processing": {
-		"chroma_transform": {
-            "enabled": 1
-        }
-	  }
-}

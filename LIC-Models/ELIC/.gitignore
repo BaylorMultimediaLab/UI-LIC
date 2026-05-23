@@ -1,0 +1,8 @@
+# Ignore some files
+*.pyc
+*.tar
+*.png
+*.log
+*.0
+*.out
+*env

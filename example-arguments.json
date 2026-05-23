@@ -1,0 +1,57 @@
+{
+    "global_arguments": {
+        "cuda": true,
+        "gpu_id": 0,
+        "epochs": 1,
+        "learning_rate": 0.00067,
+        "batch_size": 16,
+        "test_batch_size": 1,
+        "patch_size": [256, 256],
+        "train_dataset": "~/data/train",
+        "test_dataset": "~/data/test"
+    },
+    "tasks": {
+        "DCVC": {
+            "env_path": "training-testing-env",
+            "task_name": "DCVC-RT",
+            "directory": "DCVC-Fork",
+            "arguments": {
+                "experiment": "interactive_run_01",
+                "save": true
+            }
+        },
+        "ELIC": {
+            "env_path": "training-testing-env",
+            "task_name": "ELIC",
+            "directory": "ELIC",
+            "arguments": {
+                "experiment": "interactive_run_01",
+                "save": true
+            }
+        },
+        "StableCodec": {
+            "env_path": "~/training-testing-env",
+            "task_name": "StableCodec",
+            "directory": "StableCodec",
+            "arguments": {
+                "experiment": "interactive_run_01",
+                "save": true,
+                "sd_path": "~/sd-turbo", 
+                "elic_path": "~/data/elic_official.pth", 
+                "lambda_rate": "0.01"
+            }
+        },
+        "LIC-HPCM": {
+            "env_path": "~/HPCM-training-testing-env",
+            "task_name": "LIC-HPCM",
+            "directory": "LIC-HPCM",
+            "arguments": {
+                "model_name": "HPCM_Base",
+                "train_dataset": "~/data/train",
+                "test_dataset": "~/data/test",
+                "experiment": "interactive_run_01",
+                "save": true
+            }
+        }
+    }
+}   

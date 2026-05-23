@@ -1,0 +1,28 @@
+# PyTorch targeting CUDA 12.1 for RTX 4090 (sm_89) support
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch>=2.1.0
+torchvision>=0.16.0
+torchaudio>=2.1.0
+
+# Core Deep Learning & Compression
+compressai>=1.2.4
+timm==0.6.12
+
+# Data & Math (Strictly blocking Numpy 2.0 to prevent C++ ABI crashes)
+numpy>=1.22.4,<2.0.0
+scipy>=1.9.0
+pandas>=1.5.0
+
+# Vision & Machine Learning
+scikit-image>=0.20.0
+scikit-learn>=1.2.0
+opencv-python>=4.7.0
+
+# Utilities & Logging
+einops>=0.6.0
+pytorch-msssim>=0.2.1
+tensorboard>=2.14.0
+
+# Build Tools
+setuptools>=65.0.0
+wheel>=0.38.0

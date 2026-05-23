@@ -151,20 +151,30 @@ class LICApp:
         style = ttk.Style()
         if 'clam' in style.theme_names():
             style.theme_use('clam')
-            
+
         style.configure('.', font=self.F_BASE)
         style.configure('TLabel', font=self.F_BASE)
         style.configure('Header.TLabel', font=self.F_HEAD, foreground="#003366")
-        
+
         style.configure('TButton', font=self.F_BTN, padding=10)
-        
+
         style.configure('Run.TButton', font=self.F_RUN, background='#28a745', foreground='white', padding=20)
         style.map('Run.TButton', background=[('active', '#218838')])
-        
+
         style.configure('TLabelframe.Label', font=self.F_HEAD, foreground="#0055a4")
-        
+
         style.configure('TCheckbutton', font=self.F_BASE)
         style.configure('TCombobox', font=self.F_BASE)
+
+        # Enhanced readability for Entry boxes
+        style.configure('TEntry', font=self.F_BASE, padding=5, fieldbackground='white')
+
+    def _on_mousewheel(self, event):
+        # Platform-specific mouse wheel handling
+        if sys.platform == 'darwin':
+            self.config_canvas.yview_scroll(-1 * event.delta, "units")
+        else:
+            self.config_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     def load_interfaces(self, directory):
         registry = {}
@@ -193,23 +203,23 @@ class LICApp:
         self.paned.add(self.sidebar, weight=1)
 
         ttk.Label(self.sidebar, text="1. Global Settings", style='Header.TLabel').pack(anchor="w", pady=(0, 15))
-        
+
         self.gt_dir_var = tk.StringVar()
         ttk.Label(self.sidebar, text="GT Images Directory:", font=self.F_BASE).pack(anchor="w")
         gt_frame = ttk.Frame(self.sidebar)
         gt_frame.pack(fill=tk.X, pady=(0, 20))
         ttk.Entry(gt_frame, textvariable=self.gt_dir_var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(gt_frame, text="...", width=4, command=lambda: self.browse_dir(self.gt_dir_var)).pack(side=tk.LEFT, padx=(5,0))
+        ttk.Button(gt_frame, text="📂", width=4, command=lambda: self.browse_dir(self.gt_dir_var, check_images=True)).pack(side=tk.LEFT, padx=(5,0))
 
         self.out_dir_var = tk.StringVar(value=os.path.join(ROOT_DIR, "GUI-Visualizer/outputs"))
         ttk.Label(self.sidebar, text="Output Directory:", font=self.F_BASE).pack(anchor="w")
         out_frame = ttk.Frame(self.sidebar)
         out_frame.pack(fill=tk.X, pady=(0, 30))
         ttk.Entry(out_frame, textvariable=self.out_dir_var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(out_frame, text="...", width=4, command=lambda: self.browse_dir(self.out_dir_var)).pack(side=tk.LEFT, padx=(5,0))
+        ttk.Button(out_frame, text="📂", width=4, command=lambda: self.browse_dir(self.out_dir_var)).pack(side=tk.LEFT, padx=(5,0))
 
         ttk.Label(self.sidebar, text="2. Models", style='Header.TLabel').pack(anchor="w", pady=(0, 15))
-        
+
         self.model_listbox = tk.Listbox(
             self.sidebar, 
             selectmode=tk.MULTIPLE, 
@@ -219,7 +229,9 @@ class LICApp:
             bg="#2b2b2b",       
             fg="#ffffff",       
             selectbackground="#007acc", 
-            selectforeground="#ffffff"
+            selectforeground="#ffffff",
+            highlightthickness=1,
+            highlightbackground="#555555"
         )
         for name in sorted(self.registry.keys()):
             self.model_listbox.insert(tk.END, name)
@@ -240,7 +252,7 @@ class LICApp:
 
         self.config_tab = ttk.Frame(self.main_area, padding=25)
         self.main_area.add(self.config_tab, text="Configuration")
-        
+
         self.config_canvas = tk.Canvas(self.config_tab, highlightthickness=0)
         self.config_scrollbar = ttk.Scrollbar(self.config_tab, orient="vertical", command=self.config_canvas.yview)
         self.config_scrollable_frame = ttk.Frame(self.config_canvas)
@@ -252,20 +264,23 @@ class LICApp:
         self.config_canvas.create_window((0, 0), window=self.config_scrollable_frame, anchor="nw")
         self.config_canvas.configure(yscrollcommand=self.config_scrollbar.set)
 
+        # Bind mouse wheel for scrolling
+        self.config_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+
         self.config_canvas.pack(side="left", fill="both", expand=True)
         self.config_scrollbar.pack(side="right", fill="y")
 
         self.compare_tab = ttk.Frame(self.main_area, padding=20)
         self.main_area.add(self.compare_tab, text="Visual Comparison")
-        
+
         comp_controls = ttk.Frame(self.compare_tab)
         comp_controls.pack(fill=tk.X, pady=(0, 20))
-        
+
         ttk.Label(comp_controls, text="Select Image:", font=self.F_BTN).pack(side=tk.LEFT)
         self.img_selector = ttk.Combobox(comp_controls, state="readonly", width=30, font=self.F_BASE)
         self.img_selector.pack(side=tk.LEFT, padx=(10, 30))
         self.img_selector.bind("<<ComboboxSelected>>", self.update_comparison)
-        
+
         ttk.Label(comp_controls, text="Select Model:", font=self.F_BTN).pack(side=tk.LEFT)
         self.model_selector = ttk.Combobox(comp_controls, state="readonly", width=25, font=self.F_BASE)
         self.model_selector.pack(side=tk.LEFT, padx=10)
@@ -279,19 +294,19 @@ class LICApp:
 
         self.metrics_tab = ttk.Frame(self.main_area, padding=25)
         self.main_area.add(self.metrics_tab, text="Metrics Report")
-        
+
         self.setup_metrics_ui()
 
-        self.log_area = tk.Text(self.sidebar, height=10, font=self.F_LOG, bg="#f4f4f4", fg="#333333")
+        self.log_area = tk.Text(self.sidebar, height=10, font=self.F_LOG, bg="#ffffff", fg="#333333", highlightthickness=1, highlightbackground="#cccccc")
         self.log_area.pack(fill=tk.BOTH, expand=True, pady=(25, 0))
         self.log_area.bind("<Key>", self.block_input)
 
     def setup_metrics_ui(self):
         self.metrics_top = ttk.Frame(self.metrics_tab)
         self.metrics_top.pack(fill=tk.X, pady=(0, 20))
-        
+
         ttk.Label(self.metrics_top, text="Model Performance Summary", style='Header.TLabel').pack(side=tk.LEFT)
-        
+
         self.metrics_model_sel = ttk.Combobox(self.metrics_top, state="readonly", font=self.F_BASE)
         self.metrics_model_sel.pack(side=tk.RIGHT, padx=10)
         self.metrics_model_sel.bind("<<ComboboxSelected>>", self.refresh_metrics_display)
@@ -304,17 +319,17 @@ class LICApp:
 
         table_frame = ttk.Frame(self.metrics_tab)
         table_frame.pack(fill=tk.BOTH, expand=True)
-        
+
         columns = ("image", "psnr", "ssim", "lpips", "bpp")
         self.metrics_tree = ttk.Treeview(table_frame, columns=columns, show="headings")
-        
+
         for col in columns:
             self.metrics_tree.heading(col, text=col.upper())
             self.metrics_tree.column(col, anchor="center", width=150)
-            
+
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.metrics_tree.yview)
         self.metrics_tree.configure(yscrollcommand=scrollbar.set)
-        
+
         self.metrics_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
@@ -336,25 +351,30 @@ class LICApp:
             pass
         self.root.after(100, self.poll_log_queue)
 
-    def browse_dir(self, var):
-        path = filedialog.askdirectory()
+    def browse_dir(self, var, check_images=False):
+        current = var.get()
+        initial = current if current and os.path.exists(current) else ROOT_DIR
+        path = filedialog.askdirectory(initialdir=initial)
         if path:
-            path = os.path.expanduser(path)
-            try:
-                has_images = any(f.lower().endswith(('.png', '.jpg', '.jpeg')) for f in os.listdir(path))
-                if not has_images:
-                    messagebox.showwarning("Warning", "The selected directory appears to have no images.")
-            except Exception as e:
-                self.log(f"[ERROR] Could not read directory {path}: {e}\n")
+            path = os.path.abspath(os.path.expanduser(path))
+            if check_images:
+                try:
+                    has_images = any(f.lower().endswith(('.png', '.jpg', '.jpeg')) for f in os.listdir(path))
+                    if not has_images:
+                        messagebox.showwarning("Warning", "The selected directory appears to have no images.")
+                except Exception as e:
+                    self.log(f"[ERROR] Could not read directory {path}: {e}\n")
 
             var.set(path)
-            self.refresh_image_list()
-            
-    def browse_file(self, var):
-        path = filedialog.askopenfilename()
-        if path:
-            var.set(os.path.expanduser(path))
+            if check_images:
+                self.refresh_image_list()
 
+    def browse_file(self, var):
+        current = var.get()
+        initial = os.path.dirname(current) if current and os.path.exists(os.path.dirname(current)) else ROOT_DIR
+        path = filedialog.askopenfilename(initialdir=initial)
+        if path:
+            var.set(os.path.abspath(os.path.expanduser(path)))
     def log(self, msg):
         self.log_queue.put(msg)
 
@@ -364,59 +384,79 @@ class LICApp:
 
         selected_indices = self.model_listbox.curselection()
         self.selected_model_names = [self.model_listbox.get(i) for i in selected_indices]
-        
+
         self.model_selector['values'] = self.selected_model_names
         self.metrics_model_sel['values'] = self.selected_model_names
-        
+
         for name in self.selected_model_names:
             self.build_model_config_ui(name)
 
     def build_model_config_ui(self, model_name):
         frame = ttk.LabelFrame(self.config_scrollable_frame, text=f"Config: {model_name}", padding=20)
         frame.pack(fill=tk.X, pady=15, padx=10)
-        
+
         interface_cls = self.registry[model_name]
+        required_args = getattr(interface_cls, 'REQUIRED_ARGS', [])
+
         if model_name not in self.model_configs:
             self.model_configs[model_name] = {
                 "args": {},
                 "workdir": tk.StringVar(value=f"LIC-Models/{model_name}"),
                 "env": tk.StringVar()
             }
-            
+
             defaults = getattr(interface_cls, 'DEFAULT_VARS', {})
             for k, v in defaults.items():
                 if k in ['data', 'dataset', 'input', 'input_dir']: continue
                 self.model_configs[model_name]["args"][k] = tk.StringVar(value=str(v))
-            
-            for req in getattr(interface_cls, 'REQUIRED_ARGS', []):
+
+            for req in required_args:
                 if req in ['data', 'dataset', 'input', 'input_dir']: continue
                 if req not in self.model_configs[model_name]["args"]:
                     self.model_configs[model_name]["args"][req] = tk.StringVar()
 
         config = self.model_configs[model_name]
-        
-        def create_row(label_text, var, is_dir=False, is_file=False):
-            row = ttk.Frame(frame)
-            row.pack(fill=tk.X, pady=8) 
-            ttk.Label(row, text=label_text, width=20, font=self.F_BTN).pack(side=tk.LEFT)
-            ttk.Entry(row, textvariable=var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
-            
-            if is_dir:
-                ttk.Button(row, text="...", width=4, command=lambda: self.browse_dir(var)).pack(side=tk.LEFT, padx=(5,0))
-            elif is_file:
-                ttk.Button(row, text="...", width=4, command=lambda: self.browse_file(var)).pack(side=tk.LEFT, padx=(5,0))
 
-        create_row("Working Dir:", config["workdir"], is_dir=True)
+        def create_row(label_text, var, is_dir=False, is_file=False, required=False):
+            row = ttk.Frame(frame)
+            row.pack(fill=tk.X, pady=8)
+
+            display_text = label_text
+            if required:
+                display_text = "* " + display_text
+
+            lbl = ttk.Label(row, text=display_text, width=22, font=self.F_BTN)
+            lbl.pack(side=tk.LEFT)
+            if required:
+                lbl.configure(foreground="#cc0000")
+
+            entry = ttk.Entry(row, textvariable=var, font=self.F_BASE)
+            entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+            if is_dir:
+                ttk.Button(row, text="📂", width=4, command=lambda: self.browse_dir(var)).pack(side=tk.LEFT, padx=(5,0))
+            elif is_file:
+                ttk.Button(row, text="📄", width=4, command=lambda: self.browse_file(var)).pack(side=tk.LEFT, padx=(5,0))
+
+        create_row("Working Dir:", config["workdir"], is_dir=True, required=True)
         create_row("Env Path:", config["env"], is_dir=True)
 
         ttk.Separator(frame, orient='horizontal').pack(fill=tk.X, pady=15)
 
         for arg_name, var in config["args"].items():
             arg_lower = arg_name.lower()
-            is_file = any(x in arg_lower for x in ['checkpoint', 'model', 'file'])
-            is_dir = any(x in arg_lower for x in ['dir', 'dataset', 'folder', 'path', 'save']) and not is_file
             
-            create_row(f"{arg_name}:", var, is_dir=is_dir, is_file=is_file)
+            # Heuristic to distinguish between file and directory inputs
+            is_file = any(x in arg_lower for x in ['checkpoint', 'model', 'file', 'elic', 'codec', 'pth', 'pkl', 'weights'])
+            is_dir = any(x in arg_lower for x in ['dir', 'dataset', 'folder', 'save'])
+            
+            # Ambiguous 'path' defaults to directory unless it looks like a known file type above
+            if 'path' in arg_lower and not is_file and not is_dir:
+                is_dir = True
+                
+            is_required = arg_name in required_args
+            
+            create_row(f"{arg_name}:", var, is_dir=is_dir, is_file=is_file, required=is_required)
 
     def run_evaluation(self):
         if not self.selected_model_names:

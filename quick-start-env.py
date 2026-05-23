@@ -56,6 +56,11 @@ def main():
             "req": "LIC-Models/LIC-TCM/requirements.txt"
         },
         {
+            "name": "RwkvCompress",
+            "python": "3.10",
+            "req": "LIC-Models/RwkvCompress/requirements.txt"
+        },
+        {
             "name": "StableCodec",
             "python": "3.10",
             "req": "LIC-Models/StableCodec/requirements.txt"

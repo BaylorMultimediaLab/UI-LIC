@@ -114,27 +114,36 @@ class ComparisonCanvas(tk.Canvas):
         
         self.create_image(offset_x, offset_y, anchor="nw", image=self.tk_image)
         
-        canvas_font = ("sans-serif", 28, "bold")
+        # Scale canvas font
+        # Trying to find the app instance to get scale_factor, or just use a relative size
+        # Better: we'll pass scale_factor to ComparisonCanvas if needed, 
+        # but for now we'll use a heuristic.
+        scale = getattr(self.master, 'scale_factor', 1.0)
+        canvas_font = ("sans-serif", int(24 * scale), "bold")
         
         if self.scaled_img2:
             line_x = offset_x + split_x
-            self.create_line(line_x, offset_y, line_x, offset_y + self.new_h, fill="#00ffff", width=5)
-            self.create_text(offset_x + 20, offset_y + 20, text="COMPRESSED", fill="#00ffff", anchor="nw", font=canvas_font)
-            self.create_text(offset_x + self.new_w - 20, offset_y + 20, text="GROUND TRUTH", fill="#00ffff", anchor="ne", font=canvas_font)
+            self.create_line(line_x, offset_y, line_x, offset_y + self.new_h, fill="#00ffff", width=int(5 * scale))
+            self.create_text(offset_x + 20*scale, offset_y + 20*scale, text="COMPRESSED", fill="#00ffff", anchor="nw", font=canvas_font)
+            self.create_text(offset_x + self.new_w - 20*scale, offset_y + 20*scale, text="GROUND TRUTH", fill="#00ffff", anchor="ne", font=canvas_font)
         else:
-            self.create_text(offset_x + self.new_w - 20, offset_y + 20, text="GROUND TRUTH (Awaiting Output...)", fill="#ffcc00", anchor="ne", font=canvas_font)
+            self.create_text(offset_x + self.new_w - 20*scale, offset_y + 20*scale, text="GROUND TRUTH (Awaiting Output...)", fill="#ffcc00", anchor="ne", font=canvas_font)
 
 class LICApp:
     def __init__(self, root):
         self.root = root
         self.root.title("LIC Model Visualizer - Desktop")
-        self.root.geometry("1800x1100") 
         
-        self.F_BASE = ("sans-serif", 16)
-        self.F_HEAD = ("sans-serif", 22, "bold")
-        self.F_BTN  = ("sans-serif", 16, "bold")
-        self.F_RUN  = ("sans-serif", 24, "bold")
-        self.F_LOG  = ("monospace", 14)
+        # Dynamic Scaling Setup
+        self.scale_factor = self.calculate_scale_factor()
+        self.setup_geometry()
+        
+        # Scaled Font Definitions
+        self.F_BASE = ("sans-serif", int(14 * self.scale_factor))
+        self.F_HEAD = ("sans-serif", int(18 * self.scale_factor), "bold")
+        self.F_BTN  = ("sans-serif", int(14 * self.scale_factor), "bold")
+        self.F_RUN  = ("sans-serif", int(20 * self.scale_factor), "bold")
+        self.F_LOG  = ("monospace", int(12 * self.scale_factor))
         
         self.apply_styles()
         
@@ -147,18 +156,50 @@ class LICApp:
         self.setup_ui()
         self.poll_log_queue()
 
+    def calculate_scale_factor(self):
+        """Calculate scaling factor based on screen DPI."""
+        try:
+            # Get dots per inch
+            dpi = self.root.winfo_fpixels('1i')
+            # Standard DPI is 96. We use it as a baseline for our factor.
+            factor = dpi / 96.0
+            
+            # Set Tk's internal scaling (points to pixels)
+            # Tk scaling 1.0 = 72 DPI. So we set it to dpi/72.
+            self.root.tk.call('tk', 'scaling', dpi / 72.0)
+            
+            return max(1.0, factor)
+        except Exception:
+            return 1.0
+
+    def setup_geometry(self):
+        """Set window size based on screen resolution."""
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+        
+        # Aim for 80% of screen size, but with reasonable minimums
+        width = min(int(screen_w * 0.85), int(1800 * self.scale_factor))
+        height = min(int(screen_h * 0.85), int(1100 * self.scale_factor))
+        
+        self.root.geometry(f"{width}x{height}")
+
     def apply_styles(self):
         style = ttk.Style()
         if 'clam' in style.theme_names():
             style.theme_use('clam')
 
+        # Scale padding and other metrics
+        p_small = int(5 * self.scale_factor)
+        p_med = int(10 * self.scale_factor)
+        p_large = int(20 * self.scale_factor)
+
         style.configure('.', font=self.F_BASE)
         style.configure('TLabel', font=self.F_BASE)
         style.configure('Header.TLabel', font=self.F_HEAD, foreground="#003366")
 
-        style.configure('TButton', font=self.F_BTN, padding=10)
+        style.configure('TButton', font=self.F_BTN, padding=p_med)
 
-        style.configure('Run.TButton', font=self.F_RUN, background='#28a745', foreground='white', padding=20)
+        style.configure('Run.TButton', font=self.F_RUN, background='#28a745', foreground='white', padding=p_large)
         style.map('Run.TButton', background=[('active', '#218838')])
 
         style.configure('TLabelframe.Label', font=self.F_HEAD, foreground="#0055a4")
@@ -166,8 +207,10 @@ class LICApp:
         style.configure('TCheckbutton', font=self.F_BASE)
         style.configure('TCombobox', font=self.F_BASE)
 
-        # Enhanced readability for Entry boxes
-        style.configure('TEntry', font=self.F_BASE, padding=5, fieldbackground='white')
+        style.configure('TEntry', font=self.F_BASE, padding=p_small, fieldbackground='white')
+        
+        # Adjust scrollbar width for high-DPI
+        style.configure('Vertical.TScrollbar', width=int(16 * self.scale_factor))
 
     def _on_mousewheel(self, event):
         # Platform-specific mouse wheel handling
@@ -199,35 +242,37 @@ class LICApp:
         self.paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         self.paned.pack(fill=tk.BOTH, expand=True)
 
-        self.sidebar = ttk.Frame(self.paned, width=550, padding=25)
+        sidebar_width = int(550 * self.scale_factor)
+        sidebar_padding = int(25 * self.scale_factor)
+        self.sidebar = ttk.Frame(self.paned, width=sidebar_width, padding=sidebar_padding)
         self.paned.add(self.sidebar, weight=1)
 
-        ttk.Label(self.sidebar, text="1. Global Settings", style='Header.TLabel').pack(anchor="w", pady=(0, 15))
+        ttk.Label(self.sidebar, text="1. Global Settings", style='Header.TLabel').pack(anchor="w", pady=(0, int(15 * self.scale_factor)))
 
         self.gt_dir_var = tk.StringVar()
         ttk.Label(self.sidebar, text="GT Images Directory:", font=self.F_BASE).pack(anchor="w")
         gt_frame = ttk.Frame(self.sidebar)
-        gt_frame.pack(fill=tk.X, pady=(0, 20))
+        gt_frame.pack(fill=tk.X, pady=(0, int(20 * self.scale_factor)))
         ttk.Entry(gt_frame, textvariable=self.gt_dir_var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(gt_frame, text="📂", width=4, command=lambda: self.browse_dir(self.gt_dir_var, check_images=True)).pack(side=tk.LEFT, padx=(5,0))
+        ttk.Button(gt_frame, text="📂", width=int(4 * self.scale_factor), command=lambda: self.browse_dir(self.gt_dir_var, check_images=True)).pack(side=tk.LEFT, padx=(int(5 * self.scale_factor),0))
 
         self.out_dir_var = tk.StringVar(value=os.path.join(ROOT_DIR, "GUI-Visualizer/outputs"))
         ttk.Label(self.sidebar, text="Output Directory:", font=self.F_BASE).pack(anchor="w")
         out_frame = ttk.Frame(self.sidebar)
-        out_frame.pack(fill=tk.X, pady=(0, 20))
+        out_frame.pack(fill=tk.X, pady=(0, int(20 * self.scale_factor)))
         ttk.Entry(out_frame, textvariable=self.out_dir_var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(out_frame, text="📂", width=4, command=lambda: self.browse_dir(self.out_dir_var)).pack(side=tk.LEFT, padx=(5,0))
+        ttk.Button(out_frame, text="📂", width=int(4 * self.scale_factor), command=lambda: self.browse_dir(self.out_dir_var)).pack(side=tk.LEFT, padx=(int(5 * self.scale_factor),0))
 
         # Add Evaluation Environment path field
         default_eval_env = os.path.join(ROOT_DIR, "envs/eval-env")
         self.eval_env_var = tk.StringVar(value=default_eval_env if os.path.exists(default_eval_env) else "")
         ttk.Label(self.sidebar, text="Evaluation Env Path (eval-env):", font=self.F_BASE).pack(anchor="w")
         eval_env_frame = ttk.Frame(self.sidebar)
-        eval_env_frame.pack(fill=tk.X, pady=(0, 30))
+        eval_env_frame.pack(fill=tk.X, pady=(0, int(30 * self.scale_factor)))
         ttk.Entry(eval_env_frame, textvariable=self.eval_env_var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(eval_env_frame, text="📂", width=4, command=lambda: self.browse_dir(self.eval_env_var)).pack(side=tk.LEFT, padx=(5,0))
+        ttk.Button(eval_env_frame, text="📂", width=int(4 * self.scale_factor), command=lambda: self.browse_dir(self.eval_env_var)).pack(side=tk.LEFT, padx=(int(5 * self.scale_factor),0))
 
-        ttk.Label(self.sidebar, text="2. Models", style='Header.TLabel').pack(anchor="w", pady=(0, 15))
+        ttk.Label(self.sidebar, text="2. Models", style='Header.TLabel').pack(anchor="w", pady=(0, int(15 * self.scale_factor)))
 
         self.model_listbox = tk.Listbox(
             self.sidebar, 
@@ -244,11 +289,11 @@ class LICApp:
         )
         for name in sorted(self.registry.keys()):
             self.model_listbox.insert(tk.END, name)
-        self.model_listbox.pack(fill=tk.X, pady=(0, 20))
+        self.model_listbox.pack(fill=tk.X, pady=(0, int(20 * self.scale_factor)))
         self.model_listbox.bind("<<ListboxSelect>>", self.on_model_select)
 
         self.run_btn = ttk.Button(self.sidebar, text="RUN EVALUATION", style='Run.TButton', command=self.run_evaluation)
-        self.run_btn.pack(fill=tk.X, pady=20)
+        self.run_btn.pack(fill=tk.X, pady=int(20 * self.scale_factor))
 
         self.progress = ttk.Progressbar(self.sidebar, mode='indeterminate')
         self.progress.pack(fill=tk.X)
@@ -256,7 +301,7 @@ class LICApp:
         self.main_area = ttk.Notebook(self.paned)
         self.paned.add(self.main_area, weight=4)
 
-        self.config_tab = ttk.Frame(self.main_area, padding=25)
+        self.config_tab = ttk.Frame(self.main_area, padding=sidebar_padding)
         self.main_area.add(self.config_tab, text="Configuration")
 
         self.config_canvas = tk.Canvas(self.config_tab, highlightthickness=0)
@@ -276,50 +321,51 @@ class LICApp:
         self.config_canvas.pack(side="left", fill="both", expand=True)
         self.config_scrollbar.pack(side="right", fill="y")
 
-        self.compare_tab = ttk.Frame(self.main_area, padding=20)
+        self.compare_tab = ttk.Frame(self.main_area, padding=int(20 * self.scale_factor))
         self.main_area.add(self.compare_tab, text="Visual Comparison")
 
         comp_controls = ttk.Frame(self.compare_tab)
-        comp_controls.pack(fill=tk.X, pady=(0, 20))
+        comp_controls.pack(fill=tk.X, pady=(0, int(20 * self.scale_factor)))
 
         ttk.Label(comp_controls, text="Select Image:", font=self.F_BTN).pack(side=tk.LEFT)
-        self.img_selector = ttk.Combobox(comp_controls, state="readonly", width=30, font=self.F_BASE)
-        self.img_selector.pack(side=tk.LEFT, padx=(10, 30))
+        self.img_selector = ttk.Combobox(comp_controls, state="readonly", width=int(30 * self.scale_factor), font=self.F_BASE)
+        self.img_selector.pack(side=tk.LEFT, padx=(int(10 * self.scale_factor), int(30 * self.scale_factor)))
         self.img_selector.bind("<<ComboboxSelected>>", self.update_comparison)
 
         ttk.Label(comp_controls, text="Select Model:", font=self.F_BTN).pack(side=tk.LEFT)
-        self.model_selector = ttk.Combobox(comp_controls, state="readonly", width=25, font=self.F_BASE)
-        self.model_selector.pack(side=tk.LEFT, padx=10)
+        self.model_selector = ttk.Combobox(comp_controls, state="readonly", width=int(25 * self.scale_factor), font=self.F_BASE)
+        self.model_selector.pack(side=tk.LEFT, padx=int(10 * self.scale_factor))
         self.model_selector.bind("<<ComboboxSelected>>", self.update_comparison)
 
         self.metrics_btn = ttk.Button(comp_controls, text="Inspect Metrics", command=self.show_current_metrics_popup)
-        self.metrics_btn.pack(side=tk.LEFT, padx=20)
+        self.metrics_btn.pack(side=tk.LEFT, padx=int(20 * self.scale_factor))
 
         self.comp_canvas = ComparisonCanvas(self.compare_tab, bg="#1e1e1e", highlightthickness=0)
         self.comp_canvas.pack(fill=tk.BOTH, expand=True)
 
-        self.metrics_tab = ttk.Frame(self.main_area, padding=25)
+        self.metrics_tab = ttk.Frame(self.main_area, padding=sidebar_padding)
         self.main_area.add(self.metrics_tab, text="Metrics Report")
 
         self.setup_metrics_ui()
 
         self.log_area = tk.Text(self.sidebar, height=10, font=self.F_LOG, bg="#ffffff", fg="#333333", highlightthickness=1, highlightbackground="#cccccc")
-        self.log_area.pack(fill=tk.BOTH, expand=True, pady=(25, 0))
+        self.log_area.pack(fill=tk.BOTH, expand=True, pady=(int(25 * self.scale_factor), 0))
         self.log_area.bind("<Key>", self.block_input)
+
 
     def setup_metrics_ui(self):
         self.metrics_top = ttk.Frame(self.metrics_tab)
-        self.metrics_top.pack(fill=tk.X, pady=(0, 20))
+        self.metrics_top.pack(fill=tk.X, pady=(0, int(20 * self.scale_factor)))
 
         ttk.Label(self.metrics_top, text="Model Performance Summary", style='Header.TLabel').pack(side=tk.LEFT)
 
         self.metrics_model_sel = ttk.Combobox(self.metrics_top, state="readonly", font=self.F_BASE)
-        self.metrics_model_sel.pack(side=tk.RIGHT, padx=10)
+        self.metrics_model_sel.pack(side=tk.RIGHT, padx=int(10 * self.scale_factor))
         self.metrics_model_sel.bind("<<ComboboxSelected>>", self.refresh_metrics_display)
         ttk.Label(self.metrics_top, text="View Model:", font=self.F_BASE).pack(side=tk.RIGHT)
 
-        self.summary_frame = ttk.LabelFrame(self.metrics_tab, text="Averages", padding=15)
-        self.summary_frame.pack(fill=tk.X, pady=(0, 20))
+        self.summary_frame = ttk.LabelFrame(self.metrics_tab, text="Averages", padding=int(15 * self.scale_factor))
+        self.summary_frame.pack(fill=tk.X, pady=(0, int(20 * self.scale_factor)))
         self.summary_label = ttk.Label(self.summary_frame, text="No evaluation data loaded.", font=self.F_BTN)
         self.summary_label.pack()
 
@@ -331,7 +377,7 @@ class LICApp:
 
         for col in columns:
             self.metrics_tree.heading(col, text=col.upper())
-            self.metrics_tree.column(col, anchor="center", width=150)
+            self.metrics_tree.column(col, anchor="center", width=int(150 * self.scale_factor))
 
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.metrics_tree.yview)
         self.metrics_tree.configure(yscrollcommand=scrollbar.set)
@@ -398,8 +444,8 @@ class LICApp:
             self.build_model_config_ui(name)
 
     def build_model_config_ui(self, model_name):
-        frame = ttk.LabelFrame(self.config_scrollable_frame, text=f"Config: {model_name}", padding=20)
-        frame.pack(fill=tk.X, pady=15, padx=10)
+        frame = ttk.LabelFrame(self.config_scrollable_frame, text=f"Config: {model_name}", padding=int(20 * self.scale_factor))
+        frame.pack(fill=tk.X, pady=int(15 * self.scale_factor), padx=int(10 * self.scale_factor))
 
         interface_cls = self.registry[model_name]
         required_args = getattr(interface_cls, 'REQUIRED_ARGS', [])
@@ -425,13 +471,13 @@ class LICApp:
 
         def create_row(label_text, var, is_dir=False, is_file=False, required=False):
             row = ttk.Frame(frame)
-            row.pack(fill=tk.X, pady=8)
+            row.pack(fill=tk.X, pady=int(8 * self.scale_factor))
 
             display_text = label_text
             if required:
                 display_text = "* " + display_text
 
-            lbl = ttk.Label(row, text=display_text, width=22, font=self.F_BTN)
+            lbl = ttk.Label(row, text=display_text, width=int(22 * self.scale_factor), font=self.F_BTN)
             lbl.pack(side=tk.LEFT)
             if required:
                 lbl.configure(foreground="#cc0000")
@@ -440,14 +486,14 @@ class LICApp:
             entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
             if is_dir:
-                ttk.Button(row, text="📂", width=4, command=lambda: self.browse_dir(var)).pack(side=tk.LEFT, padx=(5,0))
+                ttk.Button(row, text="📂", width=int(4 * self.scale_factor), command=lambda: self.browse_dir(var)).pack(side=tk.LEFT, padx=(int(5 * self.scale_factor),0))
             elif is_file:
-                ttk.Button(row, text="📄", width=4, command=lambda: self.browse_file(var)).pack(side=tk.LEFT, padx=(5,0))
+                ttk.Button(row, text="📄", width=int(4 * self.scale_factor), command=lambda: self.browse_file(var)).pack(side=tk.LEFT, padx=(int(5 * self.scale_factor),0))
 
         create_row("Working Dir:", config["workdir"], is_dir=True, required=True)
         create_row("Env Path:", config["env"], is_dir=True)
 
-        ttk.Separator(frame, orient='horizontal').pack(fill=tk.X, pady=15)
+        ttk.Separator(frame, orient='horizontal').pack(fill=tk.X, pady=int(15 * self.scale_factor))
 
         for arg_name, var in config["args"].items():
             arg_lower = arg_name.lower()
@@ -750,20 +796,24 @@ class LICApp:
         
         popup = tk.Toplevel(self.root)
         popup.title(f"Metrics: {selected_img} ({model_name})")
-        popup.geometry("500x400")
+        
+        # Scaled popup size
+        pw = int(600 * self.scale_factor)
+        ph = int(500 * self.scale_factor)
+        popup.geometry(f"{pw}x{ph}")
         popup.transient(self.root)
         
-        frame = ttk.Frame(popup, padding=30)
+        frame = ttk.Frame(popup, padding=int(30 * self.scale_factor))
         frame.pack(fill=tk.BOTH, expand=True)
         
-        ttk.Label(frame, text=f"Image: {selected_img}", style='Header.TLabel').pack(pady=(0, 20))
+        ttk.Label(frame, text=f"Image: {selected_img}", style='Header.TLabel').pack(pady=(0, int(20 * self.scale_factor)))
         
         avg = data.get("averages", {})
         
         def add_metric(name, value, avg_val):
             row = ttk.Frame(frame)
-            row.pack(fill=tk.X, pady=10)
-            ttk.Label(row, text=f"{name}:", font=self.F_BTN, width=10).pack(side=tk.LEFT)
+            row.pack(fill=tk.X, pady=int(10 * self.scale_factor))
+            ttk.Label(row, text=f"{name}:", font=self.F_BTN, width=int(12)).pack(side=tk.LEFT)
             ttk.Label(row, text=str(value), font=self.F_BTN, foreground="#d9534f").pack(side=tk.LEFT)
             ttk.Label(row, text=f" (Model Avg: {avg_val})", font=self.F_BASE).pack(side=tk.LEFT)
 
@@ -773,17 +823,11 @@ class LICApp:
             add_metric("LPIPS", img_metrics.get("lpips"), avg.get("lpips"))
             add_metric("BPP", img_metrics.get("bpp"), avg.get("bpp"))
         else:
-            ttk.Label(frame, text="Specific metrics for this image not found in the report.", wraplength=400).pack()
+            ttk.Label(frame, text="Specific metrics for this image not found in the report.", wraplength=int(400 * self.scale_factor)).pack()
 
-        ttk.Button(frame, text="Close", command=popup.destroy).pack(pady=20)
+        ttk.Button(frame, text="Close", command=popup.destroy).pack(pady=int(20 * self.scale_factor))
 
 if __name__ == "__main__":
     root = tk.Tk()
-    
-    try:
-        root.tk.call('tk', 'scaling', 3.0)
-    except Exception as e:
-        print(f"Scaling failed: {e}")
-        
     app = LICApp(root)
     root.mainloop()

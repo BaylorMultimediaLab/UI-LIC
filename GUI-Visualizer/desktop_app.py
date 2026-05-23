@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, font as tkfont
 import os
 import sys
 
@@ -159,80 +159,86 @@ class LICApp:
     def calculate_scale_factor(self):
         """Calculate scaling factor with more aggressive heuristics for 4K."""
         try:
-            # Try to get screen width
             sw = self.root.winfo_screenwidth()
             sh = self.root.winfo_screenheight()
             
-            # Manual override via env var if needed (e.g. GUI_SCALE=2.0)
             env_scale = os.environ.get("GUI_SCALE")
             if env_scale:
                 print(f"[DEBUG] Using manual GUI_SCALE: {env_scale}")
                 return float(env_scale)
 
-            # Aggressive Heuristic for 4K and beyond
+            # Heuristic for 4K and beyond
             if sw >= 3800:
-                factor = 3.5  # Boosted from 2.5
-            elif sw >= 3000:
-                factor = 3.0
-            elif sw >= 2500:
                 factor = 2.5
+            elif sw >= 2500:
+                factor = 2.0
             elif sw >= 1900:
-                factor = 1.5
+                factor = 1.25
             else:
                 factor = 1.0
 
-            # Also check DPI
             dpi = self.root.winfo_fpixels('1i')
             dpi_factor = dpi / 96.0
             
             final_factor = max(factor, dpi_factor)
             
-            print(f"[DEBUG] Detected Resolution: {sw}x{sh}")
-            print(f"[DEBUG] Detected DPI: {dpi}")
-            print(f"[DEBUG] Calculated Scale Factor: {final_factor}")
+            print(f"[DEBUG] Detected Resolution: {sw}x{sh}, DPI: {dpi}, Scale: {final_factor}")
             
-            # Set Tk's internal scaling
-            self.root.tk.call('tk', 'scaling', (96 * final_factor) / 72.0)
+            # Reset scaling to 1.0 to handle everything manually via pixels
+            self.root.tk.call('tk', 'scaling', 1.0)
             
             return final_factor
         except Exception as e:
             print(f"[DEBUG] Scaling detection error: {e}")
-            return 2.0 # Default to high scale if we fail on high-res
-
-    def setup_geometry(self):
-        """Set window size based on screen resolution."""
-        screen_w = self.root.winfo_screenwidth()
-        screen_h = self.root.winfo_screenheight()
-        
-        # Use more screen real estate on high-res displays
-        width = int(screen_w * 0.9)
-        height = int(screen_h * 0.9)
-        
-        # Clamp to reasonable values
-        width = max(1200, min(width, int(2500 * self.scale_factor)))
-        height = max(800, min(height, int(1600 * self.scale_factor)))
-        
-        self.root.geometry(f"{width}x{height}")
+            return 1.5
 
     def apply_styles(self):
+        # Set pixel-based sizes (negative values)
+        # 1.0 scale baseline: 16px base, 22px header, etc.
+        base_sz = -int(24 * self.scale_factor)
+        head_sz = -int(32 * self.scale_factor)
+        btn_sz  = -int(24 * self.scale_factor)
+        run_sz  = -int(40 * self.scale_factor)
+        log_sz  = -int(18 * self.scale_factor)
+
+        font_family = "DejaVu Sans" if sys.platform == 'linux' else "Helvetica"
+        
+        self.F_BASE = (font_family, base_sz)
+        self.F_HEAD = (font_family, head_sz, "bold")
+        self.F_BTN  = (font_family, btn_sz, "bold")
+        self.F_RUN  = (font_family, run_sz, "bold")
+        self.F_LOG  = ("monospace", log_sz)
+
+        # Globally override default fonts
+        for font_name in ["TkDefaultFont", "TkTextFont", "TkCaptionFont", "TkMenuFont"]:
+            tkfont.nametofont(font_name).configure(family=font_family, size=base_sz)
+        
+        tkfont.nametofont("TkFixedFont").configure(family="monospace", size=log_sz)
+
         style = ttk.Style()
-        # 'clam' is often better for scaling but 'default' might be safer for fonts
         if 'clam' in style.theme_names():
             style.theme_use('clam')
 
-        # Robust font families for Linux/WSL/Windows
-        font_family = "Helvetica" if sys.platform != 'linux' else "DejaVu Sans"
+        # Reduced padding multipliers to prevent "spaced out" effect
+        p_small = int(4 * self.scale_factor)
+        p_med = int(8 * self.scale_factor)
+        p_large = int(15 * self.scale_factor)
 
-        # Significantly increased base font sizes for 4K
-        self.F_BASE = (font_family, int(18 * self.scale_factor)) # Boosted from 15
-        self.F_HEAD = (font_family, int(24 * self.scale_factor), "bold") # Boosted from 20
-        self.F_BTN  = (font_family, int(18 * self.scale_factor), "bold")
-        self.F_RUN  = (font_family, int(32 * self.scale_factor), "bold") # Boosted from 24
-        self.F_LOG  = ("monospace", int(14 * self.scale_factor))
-
-        p_small = int(8 * self.scale_factor)
-        p_med = int(16 * self.scale_factor)
-        p_large = int(30 * self.scale_factor)
+        style.configure('.', font=self.F_BASE)
+        style.configure('TLabel', font=self.F_BASE)
+        style.configure('Header.TLabel', font=self.F_HEAD, foreground="#003366")
+        style.configure('TButton', font=self.F_BTN, padding=p_med)
+        style.configure('Run.TButton', font=self.F_RUN, background='#28a745', foreground='white', padding=p_large)
+        style.map('Run.TButton', background=[('active', '#218838')])
+        style.configure('TLabelframe.Label', font=self.F_HEAD, foreground="#0055a4")
+        style.configure('TCheckbutton', font=self.F_BASE)
+        style.configure('TCombobox', font=self.F_BASE)
+        style.configure('TEntry', font=self.F_BASE, padding=p_small, fieldbackground='white')
+        style.configure('Vertical.TScrollbar', width=int(20 * self.scale_factor))
+        
+        # Explicitly style Treeview for 4K
+        style.configure("Treeview", font=self.F_BASE, rowheight=int(40 * self.scale_factor))
+        style.configure("Treeview.Heading", font=self.F_BTN)
 
         style.configure('.', font=self.F_BASE)
         style.configure('TLabel', font=self.F_BASE)

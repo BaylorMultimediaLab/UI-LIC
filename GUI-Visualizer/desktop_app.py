@@ -168,7 +168,7 @@ class LICApp:
                 return float(env_scale)
 
             # Heuristic for 4K and beyond
-            if sw >= 3800:
+            if sw >= 3000:
                 factor = 2.5
             elif sw >= 2500:
                 factor = 2.0
@@ -192,9 +192,23 @@ class LICApp:
             print(f"[DEBUG] Scaling detection error: {e}")
             return 1.5
 
+    def setup_geometry(self):
+        """Set window size based on screen resolution."""
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+        
+        # Use more screen real estate on high-res displays
+        width = int(screen_w * 0.9)
+        height = int(screen_h * 0.9)
+        
+        # Clamp to reasonable values
+        width = max(1000, min(width, int(2500 * self.scale_factor)))
+        height = max(700, min(height, int(1600 * self.scale_factor)))
+        
+        self.root.geometry(f"{width}x{height}")
+
     def apply_styles(self):
         # Set pixel-based sizes (negative values)
-        # 1.0 scale baseline: 16px base, 22px header, etc.
         base_sz = -int(24 * self.scale_factor)
         head_sz = -int(32 * self.scale_factor)
         btn_sz  = -int(24 * self.scale_factor)
@@ -239,12 +253,6 @@ class LICApp:
         # Explicitly style Treeview for 4K
         style.configure("Treeview", font=self.F_BASE, rowheight=int(40 * self.scale_factor))
         style.configure("Treeview.Heading", font=self.F_BTN)
-
-        style.configure('.', font=self.F_BASE)
-        style.configure('TLabel', font=self.F_BASE)
-        style.configure('Header.TLabel', font=self.F_HEAD, foreground="#003366")
-
-        style.configure('TButton', font=self.F_BTN, padding=p_med)
 
         style.configure('Run.TButton', font=self.F_RUN, background='#28a745', foreground='white', padding=p_large)
         style.map('Run.TButton', background=[('active', '#218838')])

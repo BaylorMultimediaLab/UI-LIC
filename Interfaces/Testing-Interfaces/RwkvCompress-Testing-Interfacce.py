@@ -10,7 +10,7 @@ class RwkvCompressTestInterface(BaseInterface):
     USE_MODULE_EXECUTION = False
     EXECUTION_PATH = "eval.py"
 
-    REQUIRED_ARGS = ["model", "checkpoints", "qualities", "input_dir", "output_dir"]
+    REQUIRED_ARGS = ["model", "checkpoints", "qualities", "input_dir", "save_dir"]
 
     ACTION_FLAGS = ["cuda", "half", "real", "verbose"]
 
@@ -24,7 +24,7 @@ class RwkvCompressTestInterface(BaseInterface):
         "checkpoints": [],
         "qualities": [],
         "input_dir": None,
-        "output_dir": None,
+        "save_dir": None,
         "result": "result.json"
     }
 
@@ -45,9 +45,7 @@ class RwkvCompressTestInterface(BaseInterface):
         "test_dataset": "input_dir",
         "input": "input_dir",
 
-        "out": "output_dir",
-        "save_dir": "output_dir",
-        "output_directory": "output_dir",
+        "output_directory": "save_dir",
     }
 
     # -------------------------
@@ -65,7 +63,8 @@ class RwkvCompressTestInterface(BaseInterface):
         "qualities": "-q",
 
         "input_dir": "-i",
-        "output_dir": "-o",
+        "save_dir": "-s",
+        "save_dir": "--save_dir",
         "result": "-r",
     }
 

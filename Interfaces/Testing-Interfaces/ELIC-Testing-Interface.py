@@ -59,7 +59,7 @@ class LICELICTestInterface(BaseInterface):
         if self.params.get("save_dir"):
             base = self.params["save_dir"]
 
-            self.params["rec_path"] = os.path.join(base, "reconstruction")
+            self.params["rec_path"] = os.path.join(base, "reconstructions")
             self.params["bin_path"] = os.path.join(base, "bitstreams")
 
             os.makedirs(self.params["rec_path"], exist_ok=True)

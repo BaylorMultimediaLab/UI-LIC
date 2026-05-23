@@ -16,7 +16,7 @@ class StableCodecInterface(BaseInterface):
         "elic_path",
         "codec_path",
         "img_path",
-        "output_dir",
+        "save_dir",
     ]
 
     # -----------------------------
@@ -35,7 +35,7 @@ class StableCodecInterface(BaseInterface):
         "elic_path": None,
         "codec_path": None,
         "img_path": None,
-        "output_dir": None,
+        "save_dir": None,
     }
 
     # -----------------------------
@@ -62,12 +62,12 @@ class StableCodecInterface(BaseInterface):
         # -----------------------------
         # SINGLE DIRECTORY CONTRACT
         # -----------------------------
-        output_dir = self.params.get("output_dir")
-        if not output_dir:
-            raise ValueError("Missing output_dir")
+        save_dir = self.params.get("save_dir")
+        if not save_dir:
+            raise ValueError("Missing save_dir")
 
-        rec_path = os.path.join(output_dir, "rec")
-        bin_path = os.path.join(output_dir, "bin")
+        rec_path = os.path.join(save_dir, "reconstructions")
+        bin_path = os.path.join(save_dir, "bitstreams")
 
         self.params["rec_path"] = rec_path
         self.params["bin_path"] = bin_path

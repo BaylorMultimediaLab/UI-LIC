@@ -52,7 +52,7 @@ class DCVCRTImageTestInterface(BaseInterface):
         if "save_dir" in self.params and self.params["save_dir"] is not None:
             base = self.params["save_dir"]
 
-            self.params["rec_path"] = os.path.join(base, "recon")
+            self.params["rec_path"] = os.path.join(base, "reconstruction")
             self.params["bin_path"] = os.path.join(base, "bitstreams")
 
             # optional safety

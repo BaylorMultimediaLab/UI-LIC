@@ -41,6 +41,8 @@ class LICTCMTestInterface(BaseInterface):
         "data": "--data",
         "save_dir": "--save_dir",
         "clip_max_norm": "--clip_max_norm",
+        "N": "-N",          # <--- THIS IS CRITICAL
+        "model": "--model", # <--- Add this if your script uses it
         "cuda": "--cuda",
         "real": "--real"
     }

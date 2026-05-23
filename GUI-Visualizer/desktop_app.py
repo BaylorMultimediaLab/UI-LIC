@@ -157,29 +157,51 @@ class LICApp:
         self.poll_log_queue()
 
     def calculate_scale_factor(self):
-        """Calculate scaling factor based on screen DPI."""
+        """Calculate scaling factor with more aggressive heuristics for 4K."""
         try:
-            # Get dots per inch
+            # Try to get screen width to guess scaling if DPI detection fails
+            sw = self.root.winfo_screenwidth()
+            
+            # Manual override via env var if needed (e.g. GUI_SCALE=2.0)
+            env_scale = os.environ.get("GUI_SCALE")
+            if env_scale:
+                return float(env_scale)
+
+            # Heuristic: If resolution is 4k (approx 3840 wide)
+            if sw >= 3000:
+                factor = 2.5
+            elif sw >= 2500:
+                factor = 2.0
+            elif sw >= 1900:
+                factor = 1.25
+            else:
+                factor = 1.0
+
+            # Also check DPI as a fallback/supplement
             dpi = self.root.winfo_fpixels('1i')
-            # Standard DPI is 96. We use it as a baseline for our factor.
-            factor = dpi / 96.0
+            dpi_factor = dpi / 96.0
             
-            # Set Tk's internal scaling (points to pixels)
-            # Tk scaling 1.0 = 72 DPI. So we set it to dpi/72.
-            self.root.tk.call('tk', 'scaling', dpi / 72.0)
+            final_factor = max(factor, dpi_factor)
             
-            return max(1.0, factor)
+            # Set Tk's internal scaling
+            self.root.tk.call('tk', 'scaling', (96 * final_factor) / 72.0)
+            
+            return final_factor
         except Exception:
-            return 1.0
+            return 1.5 if getattr(self, 'is_high_res', False) else 1.0
 
     def setup_geometry(self):
         """Set window size based on screen resolution."""
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
         
-        # Aim for 80% of screen size, but with reasonable minimums
-        width = min(int(screen_w * 0.85), int(1800 * self.scale_factor))
-        height = min(int(screen_h * 0.85), int(1100 * self.scale_factor))
+        # Use more screen real estate on high-res displays
+        width = int(screen_w * 0.9)
+        height = int(screen_h * 0.9)
+        
+        # Clamp to reasonable values
+        width = max(1200, min(width, int(2200 * self.scale_factor)))
+        height = max(800, min(height, int(1400 * self.scale_factor)))
         
         self.root.geometry(f"{width}x{height}")
 
@@ -188,10 +210,16 @@ class LICApp:
         if 'clam' in style.theme_names():
             style.theme_use('clam')
 
-        # Scale padding and other metrics
-        p_small = int(5 * self.scale_factor)
-        p_med = int(10 * self.scale_factor)
-        p_large = int(20 * self.scale_factor)
+        # Increased base font sizes for 4K
+        self.F_BASE = ("sans-serif", int(15 * self.scale_factor))
+        self.F_HEAD = ("sans-serif", int(20 * self.scale_factor), "bold")
+        self.F_BTN  = ("sans-serif", int(15 * self.scale_factor), "bold")
+        self.F_RUN  = ("sans-serif", int(24 * self.scale_factor), "bold")
+        self.F_LOG  = ("monospace", int(13 * self.scale_factor))
+
+        p_small = int(6 * self.scale_factor)
+        p_med = int(12 * self.scale_factor)
+        p_large = int(25 * self.scale_factor)
 
         style.configure('.', font=self.F_BASE)
         style.configure('TLabel', font=self.F_BASE)
@@ -209,8 +237,7 @@ class LICApp:
 
         style.configure('TEntry', font=self.F_BASE, padding=p_small, fieldbackground='white')
         
-        # Adjust scrollbar width for high-DPI
-        style.configure('Vertical.TScrollbar', width=int(16 * self.scale_factor))
+        style.configure('Vertical.TScrollbar', width=int(20 * self.scale_factor))
 
     def _on_mousewheel(self, event):
         # Platform-specific mouse wheel handling
@@ -254,14 +281,14 @@ class LICApp:
         gt_frame = ttk.Frame(self.sidebar)
         gt_frame.pack(fill=tk.X, pady=(0, int(20 * self.scale_factor)))
         ttk.Entry(gt_frame, textvariable=self.gt_dir_var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(gt_frame, text="📂", width=int(4 * self.scale_factor), command=lambda: self.browse_dir(self.gt_dir_var, check_images=True)).pack(side=tk.LEFT, padx=(int(5 * self.scale_factor),0))
+        ttk.Button(gt_frame, text="Browse", width=int(8), command=lambda: self.browse_dir(self.gt_dir_var, check_images=True)).pack(side=tk.LEFT, padx=(int(5 * self.scale_factor),0))
 
         self.out_dir_var = tk.StringVar(value=os.path.join(ROOT_DIR, "GUI-Visualizer/outputs"))
         ttk.Label(self.sidebar, text="Output Directory:", font=self.F_BASE).pack(anchor="w")
         out_frame = ttk.Frame(self.sidebar)
         out_frame.pack(fill=tk.X, pady=(0, int(20 * self.scale_factor)))
         ttk.Entry(out_frame, textvariable=self.out_dir_var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(out_frame, text="📂", width=int(4 * self.scale_factor), command=lambda: self.browse_dir(self.out_dir_var)).pack(side=tk.LEFT, padx=(int(5 * self.scale_factor),0))
+        ttk.Button(out_frame, text="Browse", width=int(8), command=lambda: self.browse_dir(self.out_dir_var)).pack(side=tk.LEFT, padx=(int(5 * self.scale_factor),0))
 
         # Add Evaluation Environment path field
         default_eval_env = os.path.join(ROOT_DIR, "envs/eval-env")
@@ -270,7 +297,7 @@ class LICApp:
         eval_env_frame = ttk.Frame(self.sidebar)
         eval_env_frame.pack(fill=tk.X, pady=(0, int(30 * self.scale_factor)))
         ttk.Entry(eval_env_frame, textvariable=self.eval_env_var, font=self.F_BASE).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(eval_env_frame, text="📂", width=int(4 * self.scale_factor), command=lambda: self.browse_dir(self.eval_env_var)).pack(side=tk.LEFT, padx=(int(5 * self.scale_factor),0))
+        ttk.Button(eval_env_frame, text="Browse", width=int(8), command=lambda: self.browse_dir(self.eval_env_var)).pack(side=tk.LEFT, padx=(int(5 * self.scale_factor),0))
 
         ttk.Label(self.sidebar, text="2. Models", style='Header.TLabel').pack(anchor="w", pady=(0, int(15 * self.scale_factor)))
 
@@ -477,7 +504,7 @@ class LICApp:
             if required:
                 display_text = "* " + display_text
 
-            lbl = ttk.Label(row, text=display_text, width=int(22 * self.scale_factor), font=self.F_BTN)
+            lbl = ttk.Label(row, text=display_text, width=int(25), font=self.F_BTN)
             lbl.pack(side=tk.LEFT)
             if required:
                 lbl.configure(foreground="#cc0000")
@@ -485,10 +512,8 @@ class LICApp:
             entry = ttk.Entry(row, textvariable=var, font=self.F_BASE)
             entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-            if is_dir:
-                ttk.Button(row, text="📂", width=int(4 * self.scale_factor), command=lambda: self.browse_dir(var)).pack(side=tk.LEFT, padx=(int(5 * self.scale_factor),0))
-            elif is_file:
-                ttk.Button(row, text="📄", width=int(4 * self.scale_factor), command=lambda: self.browse_file(var)).pack(side=tk.LEFT, padx=(int(5 * self.scale_factor),0))
+            if is_dir or is_file:
+                ttk.Button(row, text="Browse", width=int(8), command=lambda: self.browse_dir(var) if is_dir else self.browse_file(var)).pack(side=tk.LEFT, padx=(int(5 * self.scale_factor),0))
 
         create_row("Working Dir:", config["workdir"], is_dir=True, required=True)
         create_row("Env Path:", config["env"], is_dir=True)

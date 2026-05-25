@@ -131,11 +131,8 @@ class LICApp:
         self.root.title("LIC Model Visualizer - Desktop")
         self.root.geometry("1600x1000") 
         
-        self.F_BASE = ("sans-serif", 14)
-        self.F_HEAD = ("sans-serif", 18, "bold")
-        self.F_BTN  = ("sans-serif", 14, "bold")
-        self.F_RUN  = ("sans-serif", 20, "bold")
-        self.F_LOG  = ("monospace", 12)
+        self.zoom_level = 1.0
+        self.update_font_scales()
         
         self.apply_styles()
         
@@ -146,7 +143,41 @@ class LICApp:
         self.metrics_data = {} # {model_name: {averages: {}, per_image: []}}
         
         self.setup_ui()
+        self.setup_bindings()
         self.poll_log_queue()
+
+    def update_font_scales(self):
+        z = self.zoom_level
+        self.F_BASE = ("sans-serif", int(14 * z))
+        self.F_HEAD = ("sans-serif", int(18 * z), "bold")
+        self.F_BTN  = ("sans-serif", int(14 * z), "bold")
+        self.F_RUN  = ("sans-serif", int(20 * z), "bold")
+        self.F_LOG  = ("monospace", int(12 * z))
+
+    def setup_bindings(self):
+        self.root.bind("<Control-plus>", self.zoom_in)
+        self.root.bind("<Control-KP_Add>", self.zoom_in)
+        self.root.bind("<Control-minus>", self.zoom_out)
+        self.root.bind("<Control-KP_Subtract>", self.zoom_out)
+        self.root.bind("<Control-0>", self.zoom_reset)
+
+    def zoom_in(self, event=None):
+        self.zoom_level = min(3.0, self.zoom_level + 0.1)
+        self.apply_zoom()
+
+    def zoom_out(self, event=None):
+        self.zoom_level = max(0.5, self.zoom_level - 0.1)
+        self.apply_zoom()
+
+    def zoom_reset(self, event=None):
+        self.zoom_level = 1.0
+        self.apply_zoom()
+
+    def apply_zoom(self):
+        self.update_font_scales()
+        self.apply_styles()
+        # Trigger UI refresh for some elements if needed, though apply_styles handles most
+        self.on_model_select() 
 
     def apply_styles(self):
         style = ttk.Style()
@@ -465,7 +496,7 @@ class LICApp:
             defaults = getattr(interface_cls, 'DEFAULT_VARS', {})
             for k, v in defaults.items():
                 if k in ['data', 'dataset', 'input', 'input_dir', 'save_dir', 'output']: continue
-                self.model_configs[model_name]["args"][k] = tk.StringVar(value=str(v))
+                self.model_configs[model_name]["args"][k] = tk.StringVar(value="" if v is None else str(v))
 
             for req in required_args:
                 if req in ['data', 'dataset', 'input', 'input_dir', 'save_dir', 'output']: continue
@@ -520,6 +551,32 @@ class LICApp:
                 is_dir = True
             
             is_required = arg_name in required_args
+            
+            print(f"Attempting to autofill {arg_name} for {model_name} by searching common locations in {ROOT_DIR}. is_file: {is_file}, var: {var.get()}")
+
+
+            # Autofill for checkpoints/models if empty
+            if is_file and (not var.get() or var.get() == "None"):
+                print(f"Attempting to autofill {arg_name} for {model_name} by searching common locations in {ROOT_DIR}. is_file: {is_file}, var: {var.get()}")
+
+                workdir = config["workdir"].get()
+                # Try common locations
+                search_dirs = [
+                    os.path.join(ROOT_DIR, workdir),
+                    os.path.join(ROOT_DIR, workdir, "checkpoints"),
+                    os.path.join(ROOT_DIR, "checkpoints")
+                ]
+                found_files = []
+                for sd in search_dirs:
+                    if os.path.exists(sd):
+                        for ext in ["*.pth", "*.pth.tar", "*.pkl", "*.pt"]:
+                            found_files.extend(glob.glob(os.path.join(sd, ext)))
+                
+                if found_files:
+                    # Prefer latest modified
+                    found_files.sort(key=os.path.getmtime, reverse=True)
+                    var.set(found_files[0])
+
             create_row(f"{arg_name}:", var, is_dir=is_dir, is_file=is_file, required=is_required)
 
     def run_evaluation(self):
@@ -536,16 +593,21 @@ class LICApp:
 
     def execution_thread(self, gt_dir):
         base_env_dir = self.base_env_dir_var.get().strip()
-        if not base_env_dir or not os.path.exists(base_env_dir):
-            if messagebox.askyesno("Environment Folder Missing", 
-                                   f"The Environment Folder was not found at:\n{base_env_dir}\n\n"
-                                   "Would you like to try to create it? (This runs quick-start-env.py)"):
-                # Simplified trigger for quick-start if possible, or just fail
-                self.log(f"[GUI] Environment folder not found. Please run quick-start-env.py manually.\n")
-                self.root.after(0, self.finish_execution)
-                return
-            else:
-                self.log("[GUI] Proceeding without base environment folder. Sub-environments may not be found.\n")
+        
+        def find_env(name):
+            # Try user specified base
+            if base_env_dir and os.path.exists(os.path.join(base_env_dir, name)):
+                return os.path.join(base_env_dir, name)
+            # Try project-relative LIC-Models
+            if os.path.exists(os.path.join(ROOT_DIR, "LIC-Models", name)):
+                return os.path.join(ROOT_DIR, "LIC-Models", name)
+            # Try project-relative root
+            if os.path.exists(os.path.join(ROOT_DIR, name)):
+                return os.path.join(ROOT_DIR, name)
+            # Try envs/ directory
+            if os.path.exists(os.path.join(ROOT_DIR, "envs", name)):
+                return os.path.join(ROOT_DIR, "envs", name)
+            return None
 
         output_base = os.path.expanduser(self.out_dir_var.get().strip())
         tasks = {}
@@ -566,15 +628,17 @@ class LICApp:
             if user_model_env:
                 model_env = os.path.abspath(os.path.expanduser(user_model_env))
             else:
-                model_env = os.path.join(base_env_dir, f"{model_name}-env")
+                model_env = find_env(f"{model_name}-env")
 
-            if not os.path.exists(model_env):
-                self.log(f"[WARNING] Environment for {model_name} not found at {model_env}\n")
+            if not model_env or not os.path.exists(model_env):
+                self.log(f"[WARNING] Environment for {model_name} not found. Looked in common project locations.\n")
+                if not self.show_advanced_var.get():
+                     self.log("[HINT] Switch to 'Advanced Mode' to manually set the environment path if it is in a non-standard location.\n")
 
             tasks[model_name] = {
                 "task_name": model_name,
                 "directory": os.path.join(ROOT_DIR, config["workdir"].get()),
-                "env_path": model_env if os.path.exists(model_env) else None,
+                "env_path": model_env if model_env and os.path.exists(model_env) else None,
                 "arguments": final_args
             }
             eval_tasks.append({
@@ -584,9 +648,11 @@ class LICApp:
             })
 
         # Derive eval environment path
-        eval_env_path = os.path.join(base_env_dir, "eval-env")
-        if not os.path.exists(eval_env_path):
-             self.log(f"[WARNING] Evaluation environment not found at {eval_env_path}\n")
+        eval_env_path = find_env("eval-env")
+        if not eval_env_path or not os.path.exists(eval_env_path):
+             self.log(f"[WARNING] Evaluation environment 'eval-env' not found.\n")
+             if not self.show_advanced_var.get():
+                self.log("[HINT] Evaluation requires 'evaluation.py' to run in a specific environment. Ensure it was created via quick-start-env.py or set it in Advanced Mode.\n")
 
         # Track total run time per model
         model_timings = {}

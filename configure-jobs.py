@@ -134,7 +134,7 @@ class ConfigGenerator:
             prompts["num_workers"] = {"default": 8}
             prompts["seed"] = {"default": 42}
             prompts["train_dataset"] = {"default": None, "required": True, "is_path": True}
-            prompts["train_split"] = {"default": ""}
+            prompts["train_split"] = {"default": "", "message": "Enter train_split (e.g., 'train', or leave empty if dataset root contains images)"}
             prompts["epochs"] = {"default": 100}
             prompts["batch_size"] = {"default": 16}
             prompts["patch_size"] = {"default": [256, 256]}
@@ -143,9 +143,9 @@ class ConfigGenerator:
             prompts["clip_max_norm"] = {"default": 1.0}
             prompts["lambda"] = {"default": 0.01}
             prompts["save"] = {"default": True}
-            prompts["checkpoint"] = {"default": None, "is_path": True}
+            prompts["checkpoint"] = {"default": None, "is_path": True, "message": "Enter checkpoint file path"}
             prompts["metrics"] = {"default": "mse"}
-            prompts["output_directory"] = {"default": "train_run"}
+            prompts["output_directory"] = {"default": "checkpoints"}
             
         elif phase == "testing":
             prompts["num_workers"] = {"default": 1}
@@ -153,6 +153,7 @@ class ConfigGenerator:
             prompts["qp"] = {"default": 27}
             prompts["save_decoded_frame"] = {"default": False}
             prompts["metrics"] = {"default": "mse"}
+            prompts["save_dir"] = {"default": "checkpoints", "is_path": True}
             prompts["output_images_directory"] = {"default": "eval_images", "is_path": True}
             prompts["output_metrics_directory"] = {"default": "eval_metrics", "is_path": True}
         
@@ -165,8 +166,9 @@ class ConfigGenerator:
                 
             is_req = opts.get("required", False)
             is_path = opts.get("is_path", False)
+            msg = opts.get("message", f"Enter {key}")
             
-            val = self._prompt(f"Enter {key}", default=default_val, required=is_req, is_path=is_path)
+            val = self._prompt(msg, default=default_val, required=is_req, is_path=is_path)
             
             if val is not None:
                 global_args[key] = val
@@ -203,7 +205,7 @@ class ConfigGenerator:
                     print(f"  [*] {t_key}")
             print("-" * 45)
             
-            task_name = input("\nEnter the Task Name to add (or press Enter to finish phase): ").strip()
+            task_name = input("\nEnter the Task Name to add (from the list above, or press Enter to finish phase): ").strip()
             
             if not task_name:
                 break
@@ -220,7 +222,7 @@ class ConfigGenerator:
             print(f"\n--- Configuring Task: {task_key} ---")
             
             directory = self._prompt("Enter directory", default=f"LIC-Models/{task_name}")
-            env_path = self._prompt("Enter env_path", default=f"~/{task_name}-env")
+            env_path = self._prompt("Enter env_path", default=f"LIC-Models/{task_name}-env")
             
             task_info = {
                 "env_path": env_path,
@@ -322,7 +324,7 @@ class ConfigGenerator:
             print("\n" + "="*50)
             print("Configuring Evaluation Environment")
             print("="*50)
-            eval_env = self._prompt("Enter evaluation environment path", default="~/eval-env", is_path=True)
+            eval_env = self._prompt("Enter evaluation environment path", default="LIC-Models/eval-env", is_path=True)
 
             evaluation = {
                 "env_path": eval_env,

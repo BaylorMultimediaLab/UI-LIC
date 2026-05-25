@@ -23,7 +23,9 @@ class LICTCMTestInterface(BaseInterface):
         "save_dir": None,
         "clip_max_norm": 1.0,
         "cuda": True,
-        "real": True  # Must be True to trigger actual compression/bitstream generation
+        "real": True,  # Must be True to trigger actual compression/bitstream generation
+        "N": 128,
+        "M": 320
     }
 
     # Added aliases so you can use "output" in your dispatcher config
@@ -42,6 +44,7 @@ class LICTCMTestInterface(BaseInterface):
         "rec_path": "--save_dir",
         "clip_max_norm": "--clip_max_norm",
         "N": "-N",          # <--- THIS IS CRITICAL
+        "M": "-M",          # <--- Added M
         "model": "--model", # <--- Add this if your script uses it
         "cuda": "--cuda",
         "real": "--real"

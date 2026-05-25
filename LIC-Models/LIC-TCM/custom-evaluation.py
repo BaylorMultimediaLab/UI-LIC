@@ -66,6 +66,7 @@ def parse_args(argv):
     parser.add_argument("--real", action="store_true", default=True)
 
     parser.add_argument("-N", type=int, default=128, help="Number of channels")
+    parser.add_argument("-M", type=int, default=320, help="Number of channels in bottleneck")
     parser.add_argument("--model", type=str, default="bmshj2018-factorized", help="Model architecture")
     
     # --- ADDED: The save directory argument ---
@@ -88,7 +89,7 @@ def main(argv):
             
     device = 'cuda:0' if args.cuda else 'cpu'
     
-    net = TCM(config=[2,2,2,2,2,2], head_dim=[8, 16, 32, 32, 16, 8], drop_path_rate=0.0, N=args.N, M=320)
+    net = TCM(config=[2,2,2,2,2,2], head_dim=[8, 16, 32, 32, 16, 8], drop_path_rate=0.0, N=args.N, M=args.M)
     net = net.to(device)
     net.eval()
     

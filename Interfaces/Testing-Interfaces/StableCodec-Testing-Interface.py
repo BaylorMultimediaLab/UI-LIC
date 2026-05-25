@@ -31,7 +31,7 @@ class StableCodecInterface(BaseInterface):
     # INPUT CONTRACT
     # -----------------------------
     DEFAULT_VARS = {
-        "sd_path": None,
+        "sd_path": "LIC-Models/StableCodec/sd-turbo",
         "elic_path": None,
         "codec_path": None,
         "img_path": None,

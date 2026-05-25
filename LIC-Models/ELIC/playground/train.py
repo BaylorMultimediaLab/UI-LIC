@@ -153,7 +153,7 @@ def main():
 
     logger_train.info(f"Seed: {seed}")
     logger_train.info(args)
-    logger_train.info(net)
+    # logger_train.info(net)
     logger_train.info(optimizer)
     logger_train.info(aux_optimizer)
     optimizer.param_groups[0]['lr'] = args.learning_rate

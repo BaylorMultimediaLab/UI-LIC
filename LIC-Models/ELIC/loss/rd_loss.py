@@ -26,9 +26,11 @@ class RateDistortionLoss(nn.Module):
             out["mse_loss"] = self.mse(output["x_hat"], target)
             out["ms_ssim_loss"] = None
             out["loss"] = self.lmbda * 255 ** 2 * out["mse_loss"] + out["bpp_loss"]
-        elif self.metrics == 'ms-ssim':
+        elif self.metrics in ['ms-ssim', 'ssim']:
             out["mse_loss"] = None
             out["ms_ssim_loss"] = 1 - ms_ssim(output["x_hat"], target, data_range=1.0)
             out["loss"] = self.lmbda * out["ms_ssim_loss"] + out["bpp_loss"]
+        else:
+            raise ValueError(f"Unknown metrics: {self.metrics}. Supported: 'mse', 'ms-ssim', 'ssim'")
 
         return out

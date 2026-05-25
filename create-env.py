@@ -49,6 +49,34 @@ def setup_conda_env(env_path: str, requirements_file: str, python_version: str =
         print("Make sure Conda is initialized in your Ubuntu shell (run 'conda init bash' and restart the shell if needed).")
         sys.exit(1)
 
+def update_pip_requirements(env_path: str, requirements_file: str):
+    """
+    Installs/Updates requirements in an existing Conda environment.
+    """
+    env_path = os.path.abspath(os.path.expanduser(env_path))
+    requirements_file = os.path.abspath(os.path.expanduser(requirements_file))
+
+    if not os.path.exists(env_path):
+        print(f"Error: Environment not found at {env_path}")
+        return
+
+    if not os.path.exists(requirements_file):
+        print(f"Error: Could not find '{requirements_file}'")
+        return
+
+    print(f"Ensuring dependencies from {requirements_file} in {env_path}...")
+    install_cmd = [
+        "conda", "run",
+        "--prefix", env_path,
+        "pip", "install", "-r", requirements_file
+    ]
+    
+    try:
+        subprocess.run(install_cmd, check=True)
+        print("Dependencies verified/installed successfully!")
+    except subprocess.CalledProcessError as e:
+        print(f"[WARNING] Failed to update dependencies: {e}")
+
 if __name__ == "__main__":    
     TARGET_ENV_PATH = input("Enter target environment path: ").strip()
     if not TARGET_ENV_PATH:

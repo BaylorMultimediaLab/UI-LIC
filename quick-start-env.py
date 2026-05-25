@@ -84,7 +84,8 @@ def main():
 
         try:
             if os.path.exists(env_path):
-                print(f"[SKIP] Environment already exists for {model['name']} at: {env_path}")
+                print(f"[INFO] Environment already exists for {model['name']} at: {env_path}")
+                create_env_mod.update_pip_requirements(env_path, req_path)
             else:
                 print("="*60)
                 print(f"Installing {model['name']} Environment")

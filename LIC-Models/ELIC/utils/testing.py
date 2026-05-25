@@ -33,16 +33,17 @@ def test_one_epoch(epoch, test_dataloader, model, criterion, save_dir, logger_va
             if out_criterion["ms_ssim_loss"] is not None:
                 ms_ssim_loss.update(out_criterion["ms_ssim_loss"])
 
-            rec = torch2img(out_net['x_hat'])
-            img = torch2img(d)
-            p, m = compute_metrics(rec, img)
-            psnr.update(p)
-            ms_ssim.update(m)
+            for b in range(d.size(0)):
+                rec = torch2img(out_net['x_hat'], idx=b)
+                img = torch2img(d, idx=b)
+                p, m = compute_metrics(rec, img)
+                psnr.update(p)
+                ms_ssim.update(m)
 
-            if not os.path.exists(save_dir):
-                os.makedirs(save_dir)
-            rec.save(os.path.join(save_dir, '%03d_rec.png' % i))
-            img.save(os.path.join(save_dir, '%03d_gt.png' % i))
+                if not os.path.exists(save_dir):
+                    os.makedirs(save_dir)
+                rec.save(os.path.join(save_dir, '%03d_rec.png' % (i * d.size(0) + b)))
+                img.save(os.path.join(save_dir, '%03d_gt.png' % (i * d.size(0) + b)))
 
     tb_logger.add_scalar('{}'.format('[val]: loss'), loss.avg, epoch + 1)
     tb_logger.add_scalar('{}'.format('[val]: bpp_loss'), bpp_loss.avg, epoch + 1)

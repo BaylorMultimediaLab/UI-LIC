@@ -50,7 +50,7 @@ class HPCMTestInterface(BaseInterface):
         "checkpoint": "--checkpoint",
         "dataset": "--dataset",
         "num": "-num",
-        "rec_path": "--save_dir",
+        "save_dir": "--save_dir",
     }
 
     def __init__(self, job_args=None, global_args=None):
@@ -63,8 +63,7 @@ class HPCMTestInterface(BaseInterface):
             raise ValueError("checkpoint is required")
 
         if self.params.get("save_dir"):
-            self.params["rec_path"] = os.path.join(self.params["save_dir"], "reconstruction")
-            os.makedirs(self.params["rec_path"], exist_ok=True)
+            os.makedirs(self.params["save_dir"], exist_ok=True)
 
     def execute(self):
         """

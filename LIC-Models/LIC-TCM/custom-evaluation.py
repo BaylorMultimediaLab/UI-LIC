@@ -89,10 +89,6 @@ def main(argv):
             
     device = 'cuda:0' if args.cuda else 'cpu'
     
-    net = TCM(config=[2,2,2,2,2,2], head_dim=[8, 16, 32, 32, 16, 8], drop_path_rate=0.0, N=args.N, M=args.M)
-    net = net.to(device)
-    net.eval()
-    
     count = 0
     PSNR = 0
     Bit_rate = 0
@@ -105,6 +101,18 @@ def main(argv):
         checkpoint = torch.load(args.checkpoint, map_location=device)
         for k, v in checkpoint["state_dict"].items():
             dictory[k.replace("module.", "")] = v
+            
+        # Auto-detect N and M from checkpoint to prevent size mismatch
+        if 'g_a.0.conv1.weight' in dictory:
+            args.N = dictory['g_a.0.conv1.weight'].shape[0] // 2
+        if 'g_a.9.weight' in dictory:
+            args.M = dictory['g_a.9.weight'].shape[0]
+            
+    net = TCM(config=[2,2,2,2,2,2], head_dim=[8, 16, 32, 32, 16, 8], drop_path_rate=0.0, N=args.N, M=args.M)
+    net = net.to(device)
+    net.eval()
+    
+    if args.checkpoint:
         net.load_state_dict(dictory)
 
     # --- SETUP OUTPUT DIRECTORIES ---

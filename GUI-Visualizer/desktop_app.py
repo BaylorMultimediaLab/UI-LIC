@@ -552,13 +552,8 @@ class LICApp:
             
             is_required = arg_name in required_args
             
-            print(f"Attempting to autofill {arg_name} for {model_name} by searching common locations in {ROOT_DIR}. is_file: {is_file}, var: {var.get()}")
-
-
             # Autofill for checkpoints/models if empty
             if is_file and (not var.get() or var.get() == "None"):
-                print(f"Attempting to autofill {arg_name} for {model_name} by searching common locations in {ROOT_DIR}. is_file: {is_file}, var: {var.get()}")
-
                 workdir = config["workdir"].get()
                 # Try common locations
                 search_dirs = [

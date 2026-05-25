@@ -242,6 +242,11 @@ class ConfigGenerator:
                 print("\n[Required Arguments]")
                 for arg in required_args:
                     prev_val = self._get_known_arg(arg, aliases)
+                    
+                    # If there's no previously known arg, check if there's a default for this required arg
+                    if prev_val is None and arg in default_args:
+                        prev_val = default_args[arg]
+                        
                     if prev_val is not None:
                         val = self._prompt(f"{arg}", default=prev_val)
                     else:

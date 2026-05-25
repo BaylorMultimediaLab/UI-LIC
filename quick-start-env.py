@@ -2,6 +2,7 @@ import os
 import sys
 import argparse
 import importlib.util
+import subprocess
 
 # Dynamically import create-env.py because of the dash in filename
 def load_create_env():
@@ -22,11 +23,8 @@ def main():
 
     base_path = args.base_path
     if not base_path:
-        base_path = input("Enter the base directory path for environments: ").strip()
-    
-    if not base_path:
-        print("No path provided. Exiting.")
-        sys.exit(1)
+        base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "LIC-Models")
+        print(f"No base_path provided. Defaulting to: {base_path}")
 
     base_path = os.path.abspath(os.path.expanduser(base_path))
     os.makedirs(base_path, exist_ok=True)
@@ -84,14 +82,44 @@ def main():
             print(f"[SKIP] Requirements file not found for {model['name']}: {req_path}")
             continue
 
-        print("="*60)
-        print(f"Installing {model['name']} Environment")
-        print(f"Path: {env_path}")
-        print(f"Python: {py_ver}")
-        print("="*60)
-
         try:
-            create_env_mod.setup_conda_env(env_path, req_path, py_ver)
+            if os.path.exists(env_path):
+                print(f"[SKIP] Environment already exists for {model['name']} at: {env_path}")
+            else:
+                print("="*60)
+                print(f"Installing {model['name']} Environment")
+                print(f"Path: {env_path}")
+                print(f"Python: {py_ver}")
+                print("="*60)
+                create_env_mod.setup_conda_env(env_path, req_path, py_ver)
+
+            if model['name'] == 'StableCodec':
+                sd_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "LIC-Models", "StableCodec", "sd-turbo")
+                if not os.path.exists(sd_path):
+                    print("="*60)
+                    print("Cloning sd-turbo from Hugging Face for StableCodec...")
+                    print("="*60)
+                    try:
+                        subprocess.run(["git", "clone", "https://huggingface.co/stabilityai/sd-turbo", sd_path], check=True)
+                        print("sd-turbo downloaded successfully.")
+                    except subprocess.CalledProcessError as e:
+                        print(f"[WARNING] Failed to clone sd-turbo into {sd_path}: {e}")
+                else:
+                    print(f"sd-turbo already exists at {sd_path}")
+
+                elic_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "LIC-Models", "StableCodec", "elic.pth")
+                if not os.path.exists(elic_path):
+                    print("="*60)
+                    print("Downloading ELIC checkpoint from Google Drive for StableCodec...")
+                    print("="*60)
+                    try:
+                        subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "gdown"], check=True)
+                        subprocess.run([sys.executable, "-m", "gdown", "1jUfYJdZd0-bYUsoOUWwEpI5t1MZYP3AP", "-O", elic_path], check=True)
+                        print("ELIC checkpoint downloaded successfully.")
+                    except subprocess.CalledProcessError as e:
+                        print(f"[WARNING] Failed to download ELIC checkpoint into {elic_path}: {e}")
+                else:
+                    print(f"ELIC checkpoint already exists at {elic_path}")
         except Exception as e:
             print(f"\n[ERROR] Failed to setup environment for {model['name']}: {e}")
             choice = input("Continue with next model? (y/N): ").strip().lower()

@@ -32,7 +32,7 @@ class StableCodecInterface(BaseInterface):
     # -----------------------------
     DEFAULT_VARS = {
         "sd_path": "LIC-Models/StableCodec/sd-turbo",
-        "elic_path": None,
+        "elic_path": "LIC-Models/StableCodec/elic.pth",
         "codec_path": None,
         "img_path": None,
         "save_dir": None,

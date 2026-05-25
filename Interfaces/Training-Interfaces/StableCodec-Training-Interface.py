@@ -31,7 +31,8 @@ class StableCodecTrainInterface(BaseInterface):
 
     # Derived from the explicit argparse usage inside the provided StableCodec training script
     DEFAULT_VARS = {
-        "sd_path": None,
+        "sd_path": "LIC-Models/StableCodec/sd-turbo",
+        "elic_path": "LIC-Models/StableCodec/elic.pth",
         "gradient_accumulation_steps": 1,
         "mixed_precision": "bf16",
         "report_to": "tensorboard",

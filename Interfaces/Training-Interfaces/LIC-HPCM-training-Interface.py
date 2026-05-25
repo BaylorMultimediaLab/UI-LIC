@@ -29,7 +29,7 @@ class LIC_HCPM_TrainInterface(BaseInterface):
 
     # Derived from the explicit argparse usage inside the provided LIC-HCPM training script
     DEFAULT_VARS = {
-        "model_name": None,
+        "model_name": "HPCM_base",
         "model_class": "hypers",
         "train_dataset": None,
         "test_dataset": None,

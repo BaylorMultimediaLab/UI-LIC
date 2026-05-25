@@ -565,12 +565,20 @@ class LICApp:
                 for sd in search_dirs:
                     if os.path.exists(sd):
                         for ext in ["*.pth", "*.pth.tar", "*.pkl", "*.pt"]:
-                            found_files.extend(glob.glob(os.path.join(sd, ext)))
+                            for depth in range(4):
+                                wildcards = ["*"] * depth
+                                pattern = os.path.join(sd, *wildcards, ext)
+                                found_files.extend(glob.glob(pattern))
                 
                 if found_files:
-                    # Prefer latest modified
-                    found_files.sort(key=os.path.getmtime, reverse=True)
-                    var.set(found_files[0])
+                    # Priority: 1. Contains 'best', 2. Newest modified
+                    best_files = [f for f in found_files if 'best' in os.path.basename(f).lower()]
+                    if best_files:
+                        best_files.sort(key=os.path.getmtime, reverse=True)
+                        var.set(best_files[0])
+                    else:
+                        found_files.sort(key=os.path.getmtime, reverse=True)
+                        var.set(found_files[0])
 
             create_row(f"{arg_name}:", var, is_dir=is_dir, is_file=is_file, required=is_required)
 

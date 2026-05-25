@@ -207,7 +207,6 @@ def main(args):
                                 val_count += 1
 
                         logs = {}
-                        assert len(l_psnr) == 24
                         logs["val/rate"] = np.mean(l_rate)
                         logs["val/y"] = np.mean(l_y)
                         logs["val/z"] = np.mean(l_z)

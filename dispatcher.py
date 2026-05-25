@@ -52,7 +52,7 @@ class Dispatcher:
         path_keys = {
             "dataset", "data", "input_dir", "input_dirs", 
             "checkpoint", "checkpoints", "save_dir", "output_dir", 
-            "data_dir", "log_dir"
+            "data_dir", "log_dir", "sd_path", "elic_path"
         }
         
         for k, v in args_dict.items():

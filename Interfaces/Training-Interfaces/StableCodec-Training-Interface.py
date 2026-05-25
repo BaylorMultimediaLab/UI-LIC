@@ -118,6 +118,14 @@ class StableCodecTrainInterface(BaseInterface):
         # Call the parent BaseInterface init to load and merge all arguments
         super().__init__(job_args, global_args)
         
+        # -----------------------------
+        # PATH ROBUSTNESS
+        # -----------------------------
+        # Ensure paths are absolute relative to project root before execution CWD changes
+        for key in ["sd_path", "elic_path", "output_dir", "train_dataset", "test_dataset"]:
+            if self.params.get(key):
+                self.params[key] = os.path.abspath(os.path.expanduser(self.params[key]))
+
         # --- UNIFIED TRANSLATION LOGIC ---
         
         #    Strip the master 'cuda' unified parameter since this script automatically 

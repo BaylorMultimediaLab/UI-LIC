@@ -95,15 +95,20 @@ def main():
 
             if model['name'] == 'StableCodec':
                 sd_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "LIC-Models", "StableCodec", "sd-turbo")
-                if not os.path.exists(sd_path):
+                if not os.path.exists(sd_path) or (os.path.exists(sd_path) and any(os.path.getsize(os.path.join(sd_path, "text_encoder", f)) < 1000 for f in ["model.safetensors"] if os.path.exists(os.path.join(sd_path, "text_encoder", f)))):
                     print("="*60)
-                    print("Cloning sd-turbo from Hugging Face for StableCodec...")
+                    print("Downloading sd-turbo weights from Hugging Face for StableCodec...")
                     print("="*60)
                     try:
-                        subprocess.run(["git", "clone", "https://huggingface.co/stabilityai/sd-turbo", sd_path], check=True)
+                        subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "huggingface-hub"], check=True)
+                        download_script = f"""
+from huggingface_hub import snapshot_download
+snapshot_download(repo_id="stabilityai/sd-turbo", local_dir="{sd_path}")
+"""
+                        subprocess.run([sys.executable, "-c", download_script], check=True)
                         print("sd-turbo downloaded successfully.")
                     except subprocess.CalledProcessError as e:
-                        print(f"[WARNING] Failed to clone sd-turbo into {sd_path}: {e}")
+                        print(f"[WARNING] Failed to download sd-turbo into {sd_path}: {e}")
                 else:
                     print(f"sd-turbo already exists at {sd_path}")
 

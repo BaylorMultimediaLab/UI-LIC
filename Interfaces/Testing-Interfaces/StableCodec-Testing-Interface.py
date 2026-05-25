@@ -60,6 +60,14 @@ class StableCodecInterface(BaseInterface):
         super().__init__(job_args, global_args)
 
         # -----------------------------
+        # PATH ROBUSTNESS
+        # -----------------------------
+        # Ensure paths are absolute relative to project root before execution CWD changes
+        for key in ["sd_path", "elic_path", "codec_path", "img_path", "save_dir"]:
+            if self.params.get(key):
+                self.params[key] = os.path.abspath(os.path.expanduser(self.params[key]))
+
+        # -----------------------------
         # SINGLE DIRECTORY CONTRACT
         # -----------------------------
         save_dir = self.params.get("save_dir")

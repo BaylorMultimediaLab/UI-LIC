@@ -246,7 +246,10 @@ def parse_args(argv):
         help="Model architecture (default: %(default)s)",
     )
     parser.add_argument(
-        "-d", "--dataset", type=str, required=True, help="Training dataset"
+        "--train_dataset", type=str, required=True, help="Training dataset"
+    )
+    parser.add_argument(
+        "--test_dataset", type=str, required=True, help="Test dataset"
     )
     parser.add_argument(
         "-e",
@@ -349,8 +352,8 @@ def main(argv):
         [transforms.CenterCrop(args.patch_size), transforms.ToTensor()]
     )
 
-    train_dataset = ImageFolder(args.dataset, split="train", transform=train_transforms)
-    test_dataset = ImageFolder(args.dataset, split="test", transform=test_transforms)
+    train_dataset = ImageFolder(args.train_dataset, split="", transform=train_transforms)
+    test_dataset = ImageFolder(args.test_dataset, split="", transform=test_transforms)
 
     device = "cuda" if args.cuda and torch.cuda.is_available() else "cpu"
     print(device)

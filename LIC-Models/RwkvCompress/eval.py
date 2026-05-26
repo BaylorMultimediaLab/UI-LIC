@@ -119,7 +119,7 @@ def load_checkpoint(net_cls, checkpoint_path):
 
 
 @torch.no_grad()
-def inference_real(model, x, fout=""):
+def inference_real(model, x, fout="", fbin=""):
     x = x.unsqueeze(0)
     x_padded, padding = pad_centering(x, 128)
 
@@ -137,6 +137,9 @@ def inference_real(model, x, fout=""):
     if fout:
         img = torch2img(out_dec["x_hat"])
         img.save(fout)
+    
+    if fbin:
+        torch.save({"strings": out_enc["strings"], "shape": out_enc["shape"]}, fbin)
 
     num_pixels = x.size(0) * x.size(2) * x.size(3)
     bpp_items = [len(s[0]) * 8.0 / num_pixels for s in out_enc["strings"]]
@@ -196,21 +199,29 @@ def eval_model(model, quality, args):
     if len(filepaths) == 0:
         print(f"Error: no images found in {args.input_dir}.", file=sys.stderr)
         raise SystemExit(1)
-    if args.output_dir:
-        out_sub_dir = f"{args.output_dir}/{quality}"
-        os.makedirs(out_sub_dir, exist_ok=True)
+    
+    if args.save_dir:
+        q_dir = os.path.join(args.save_dir, f"quality_{quality}")
+        recon_dir = os.path.join(q_dir, "reconstructions")
+        bit_dir = os.path.join(q_dir, "bitstreams")
+        os.makedirs(recon_dir, exist_ok=True)
+        os.makedirs(bit_dir, exist_ok=True)
 
     for file in filepaths:
         fout = ""
-        if args.output_dir:
-            fout = os.path.join(out_sub_dir, os.path.basename(file))
+        fbin = ""
+        if args.save_dir:
+            base_name = os.path.splitext(os.path.basename(file))[0]
+            fout = os.path.join(recon_dir, f"{base_name}.png")
+            fbin = os.path.join(bit_dir, f"{base_name}.pt")
+
         x = read_image(file).to(device)
         if args.half:
             model = model.half()
             x = x.half()
         if args.real:
             model.update()
-            rv = inference_real(model, x, fout)
+            rv = inference_real(model, x, fout, fbin)
         else:
             rv = inference_esti(model, x, fout)
         for k, v in rv.items():
@@ -273,7 +284,7 @@ def setup_args():
         help="quality labels correspoding to the checkpoint path list",
     )
     parser.add_argument("-i", "--input-dir", type=str)
-    parser.add_argument("-o", "--output-dir", type=str, default="")
+    parser.add_argument("-s", "--save_dir", type=str, default="")
     parser.add_argument("-r", "--result", type=str, help="result file path")
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose mode")
     return parser

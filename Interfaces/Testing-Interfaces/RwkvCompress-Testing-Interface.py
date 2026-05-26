@@ -64,7 +64,6 @@ class RwkvCompressTestInterface(BaseInterface):
 
         "input_dir": "-i",
         "save_dir": "-s",
-        "save_dir": "--save_dir",
         "result": "-r",
     }
 

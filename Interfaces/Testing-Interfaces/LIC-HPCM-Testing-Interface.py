@@ -62,6 +62,9 @@ class HPCMTestInterface(BaseInterface):
         if not self.params.get("checkpoint"):
             raise ValueError("checkpoint is required")
 
+        if self.params.get("save_dir"):
+            os.makedirs(self.params["save_dir"], exist_ok=True)
+
     def execute(self):
         """
         Ensure HPCM eval compatibility before execution.

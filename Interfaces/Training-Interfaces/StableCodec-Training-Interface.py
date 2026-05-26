@@ -31,7 +31,8 @@ class StableCodecTrainInterface(BaseInterface):
 
     # Derived from the explicit argparse usage inside the provided StableCodec training script
     DEFAULT_VARS = {
-        "sd_path": None,
+        "sd_path": "LIC-Models/StableCodec/sd-turbo",
+        "elic_path": "LIC-Models/StableCodec/elic.pth",
         "gradient_accumulation_steps": 1,
         "mixed_precision": "bf16",
         "report_to": "tensorboard",
@@ -41,7 +42,7 @@ class StableCodecTrainInterface(BaseInterface):
         "train_patch_size": 256,
         "train_batch_size": 8,
         "dataloader_num_workers": 4,
-        "output_dir": "experiments/StableCodec",
+        "output_dir": "LIC-Models/StableCodec/checkpoints",
         "enable_xformers_memory_efficient_attention": False,
         "gradient_checkpointing": False,
         "allow_tf32": False,
@@ -117,6 +118,14 @@ class StableCodecTrainInterface(BaseInterface):
         # Call the parent BaseInterface init to load and merge all arguments
         super().__init__(job_args, global_args)
         
+        # -----------------------------
+        # PATH ROBUSTNESS
+        # -----------------------------
+        # Ensure paths are absolute relative to project root before execution CWD changes
+        for key in ["sd_path", "elic_path", "output_dir", "train_dataset", "test_dataset"]:
+            if self.params.get(key):
+                self.params[key] = os.path.abspath(os.path.expanduser(self.params[key]))
+
         # --- UNIFIED TRANSLATION LOGIC ---
         
         #    Strip the master 'cuda' unified parameter since this script automatically 

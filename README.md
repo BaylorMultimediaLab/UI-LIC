@@ -71,17 +71,25 @@ The `Interfaces/` directory contains the "bridge" logic for each model. Each int
 
 ### Evaluation Pipeline (`evaluation.py`)
 The dispatcher automatically hands off results to `evaluation.py`. This script handles:
-- Calculating PSNR, MS-SSIM, and BPP.
-- Managing YUV vs RGB conversions.
+- Calculating PSNR, SSIM, LPIPS, and BPP.
+- **VMAF Evaluation:** Optional high-quality perceptual metric calculated via Dockerized FFmpeg.
 - Aggregating results into structured reports in the `save-dir`.
+
+**Enabling VMAF:**
+To enable VMAF, add `"use_vmaf": true` to the `evaluation` block in your `arguments.json`, or pass the `--use_vmaf` flag when running `evaluation.py` manually.
 
 ---
 
 ## System Prerequisites
-Before setting up your virtual environments, ensure your system has the necessary external libraries installed.
+Before setting up your virtual environments, ensure your system has the necessary external libraries and tools installed.
+
+### Docker (Required for VMAF)
+The evaluation pipeline uses **Docker** to calculate the **VMAF** (Video Multi-Method Assessment Fusion) metric. This ensures that a correctly compiled version of FFmpeg with `libvmaf` is available regardless of your host OS configuration.
+- **Requirement:** Docker Desktop (Mac/Windows) or Docker Engine (Linux) must be installed and running.
+- **Implementation:** The system uses the `mwader/static-ffmpeg` image. Local images are dynamically mounted into the container as read-only volumes for comparison, avoiding the need for a complex local FFmpeg installation.
 
 ### OS-Level Dependencies
-The evaluation pipeline relies on `ffmpeg` for video-based metric processing and frame manipulation. Since the Python `ffmpeg-python` package is merely a wrapper, you must have the `ffmpeg` binary installed on your host system:
+For standard frame manipulation and other video-based tasks, the `ffmpeg` binary is still recommended on your host system:
 
 ```bash
 # For Ubuntu/Debian based systems
@@ -120,6 +128,12 @@ The following models are integrated into the platform, each with a specialized i
 *Learned Image Compression with Hierarchical Progressive Context Modeling*
 - **Recommended Python Version:** 3.8
 - **Strength:** Optimized for hardware acceleration and fast parallel decoding.
+
+### **RwkvCompress**
+*Efficient Learned Image Compression via RWKV architecture*
+- **Recommended Python Version:** 3.10
+- **Strength:** Global dependency modeling with linear-attention computational efficiency.
+dware acceleration and fast parallel decoding.
 
 ### **RwkvCompress**
 *Efficient Learned Image Compression via RWKV architecture*

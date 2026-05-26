@@ -31,25 +31,37 @@ if ROOT_DIR not in sys.path:
 class ComparisonCanvas(tk.Canvas):
     def __init__(self, master, **kwargs):
         super().__init__(master, **kwargs)
-        self.image1 = None # GT
-        self.image2 = None # Compressed
+        self.image1 = None # Right Image
+        self.image2 = None # Left Image
+        self.label1 = "Right"
+        self.label2 = "Left"
         self.scaled_img1 = None # Cached resize
         self.scaled_img2 = None # Cached resize
         self.tk_image = None
         self.slider_pos = 0.5
-        
+
         self.bind("<Configure>", self.on_resize)
         self.bind("<B1-Motion>", self.on_drag)
         self.bind("<Button-1>", self.on_drag)
 
-    def set_images(self, path1, path2=None):
+    def set_images(self, path1, path2=None, label1="Right", label2="Left"):
+        """
+        path1: Right Image
+        path2: Left Image
+        """
+        self.label1 = label1
+        self.label2 = label2
         try:
-            self.image1 = Image.open(path1).convert("RGB")
+            if path1 and os.path.exists(path1):
+                self.image1 = Image.open(path1).convert("RGB")
+            else:
+                self.image1 = None
+
             if path2 and os.path.exists(path2):
                 self.image2 = Image.open(path2).convert("RGB")
             else:
                 self.image2 = None
-                
+
             self.update_scaled_images()
             self.render()
         except Exception as e:
@@ -61,20 +73,26 @@ class ComparisonCanvas(tk.Canvas):
 
     def update_scaled_images(self):
         """Perform the expensive LANCZOS resize only once per window resize or image load."""
-        if not self.image1: return
-        
+        if not self.image1 and not self.image2: return
+
+        # Use the first available image to determine ratio
+        base_img = self.image1 if self.image1 else self.image2
+
         w = self.winfo_width()
         h = self.winfo_height()
-        
+
         if w < 10 or h < 10: return
-        
-        img_w, img_h = self.image1.size
+
+        img_w, img_h = base_img.size
         ratio = min(w / img_w, h / img_h)
         self.new_w = int(img_w * ratio)
         self.new_h = int(img_h * ratio)
-        
-        self.scaled_img1 = self.image1.resize((self.new_w, self.new_h), Image.LANCZOS)
-        
+
+        if self.image1:
+            self.scaled_img1 = self.image1.resize((self.new_w, self.new_h), Image.LANCZOS)
+        else:
+            self.scaled_img1 = None
+
         if self.image2:
             self.scaled_img2 = self.image2.resize((self.new_w, self.new_h), Image.LANCZOS)
         else:
@@ -82,49 +100,53 @@ class ComparisonCanvas(tk.Canvas):
 
     def on_drag(self, event):
         width = self.winfo_width()
-        if width > 0 and self.scaled_img2: 
+        if width > 0 and self.scaled_img1 and self.scaled_img2: 
             self.slider_pos = max(0, min(1, event.x / width))
             self.render()
 
     def render(self):
-        if not getattr(self, 'scaled_img1', None):
+        if not self.scaled_img1 and not self.scaled_img2:
             return
 
         canvas_width = self.winfo_width()
         canvas_height = self.winfo_height()
-        
+
         combined = Image.new("RGB", (self.new_w, self.new_h))
-        
-        if self.scaled_img2:
+
+        if self.scaled_img1 and self.scaled_img2:
             split_x = int(self.new_w * self.slider_pos)
-            
+
             left_part = self.scaled_img2.crop((0, 0, split_x, self.new_h))
             right_part = self.scaled_img1.crop((split_x, 0, self.new_w, self.new_h))
-            
+
             combined.paste(left_part, (0, 0))
             combined.paste(right_part, (split_x, 0))
-        else:
+        elif self.scaled_img1:
             split_x = 0
             combined.paste(self.scaled_img1, (0, 0))
+        elif self.scaled_img2:
+            split_x = self.new_w
+            combined.paste(self.scaled_img2, (0, 0))
 
         self.tk_image = ImageTk.PhotoImage(combined)
         self.delete("all")
-        
+
         offset_x = (canvas_width - self.new_w) // 2
         offset_y = (canvas_height - self.new_h) // 2
-        
+
         self.create_image(offset_x, offset_y, anchor="nw", image=self.tk_image)
-        
+
         canvas_font = ("sans-serif", 24, "bold")
-        
-        if self.scaled_img2:
+
+        if self.scaled_img1 and self.scaled_img2:
             line_x = offset_x + split_x
             self.create_line(line_x, offset_y, line_x, offset_y + self.new_h, fill="#00ffff", width=5)
-            self.create_text(offset_x + 20, offset_y + 20, text="COMPRESSED", fill="#00ffff", anchor="nw", font=canvas_font)
-            self.create_text(offset_x + self.new_w - 20, offset_y + 20, text="GROUND TRUTH", fill="#00ffff", anchor="ne", font=canvas_font)
-        else:
-            self.create_text(offset_x + self.new_w - 20, offset_y + 20, text="GROUND TRUTH (Awaiting Output...)", fill="#ffcc00", anchor="ne", font=canvas_font)
-
+            self.create_text(offset_x + 20, offset_y + 20, text=self.label2.upper(), fill="#00ffff", anchor="nw", font=canvas_font)
+            self.create_text(offset_x + self.new_w - 20, offset_y + 20, text=self.label1.upper(), fill="#00ffff", anchor="ne", font=canvas_font)
+        elif self.scaled_img1:
+            self.create_text(offset_x + self.new_w - 20, offset_y + 20, text=f"{self.label1.upper()} (ONLY)", fill="#ffcc00", anchor="ne", font=canvas_font)
+        elif self.scaled_img2:
+            self.create_text(offset_x + 20, offset_y + 20, text=f"{self.label2.upper()} (ONLY)", fill="#ffcc00", anchor="nw", font=canvas_font)
 class LICApp:
     def __init__(self, root):
         self.root = root
@@ -326,15 +348,22 @@ class LICApp:
         comp_controls = ttk.Frame(self.compare_tab)
         comp_controls.pack(fill=tk.X, pady=(0, 15))
 
-        ttk.Label(comp_controls, text="Select Image:", font=self.F_BTN).pack(side=tk.LEFT)
+        ttk.Label(comp_controls, text="Image:", font=self.F_BTN).pack(side=tk.LEFT)
         self.img_selector = ttk.Combobox(comp_controls, state="readonly", width=25, font=self.F_BASE)
         self.img_selector.pack(side=tk.LEFT, padx=(5, 15))
         self.img_selector.bind("<<ComboboxSelected>>", self.update_comparison)
 
-        ttk.Label(comp_controls, text="Select Model:", font=self.F_BTN).pack(side=tk.LEFT)
-        self.model_selector = ttk.Combobox(comp_controls, state="readonly", width=20, font=self.F_BASE)
-        self.model_selector.pack(side=tk.LEFT, padx=5)
-        self.model_selector.bind("<<ComboboxSelected>>", self.update_comparison)
+        ttk.Label(comp_controls, text="Left Side:", font=self.F_BTN).pack(side=tk.LEFT)
+        self.model_selector_left = ttk.Combobox(comp_controls, state="readonly", width=15, font=self.F_BASE, values=["Ground Truth"])
+        self.model_selector_left.set("Ground Truth")
+        self.model_selector_left.pack(side=tk.LEFT, padx=5)
+        self.model_selector_left.bind("<<ComboboxSelected>>", self.update_comparison)
+
+        ttk.Label(comp_controls, text="Right Side:", font=self.F_BTN).pack(side=tk.LEFT)
+        self.model_selector_right = ttk.Combobox(comp_controls, state="readonly", width=15, font=self.F_BASE, values=["Ground Truth"])
+        self.model_selector_right.set("Ground Truth")
+        self.model_selector_right.pack(side=tk.LEFT, padx=5)
+        self.model_selector_right.bind("<<ComboboxSelected>>", self.update_comparison)
 
         self.metrics_btn = ttk.Button(comp_controls, text="Metrics", command=self.show_current_metrics_popup)
         self.metrics_btn.pack(side=tk.LEFT, padx=10)
@@ -473,11 +502,24 @@ class LICApp:
         selected_indices = self.model_listbox.curselection()
         self.selected_model_names = [self.model_listbox.get(i) for i in selected_indices]
 
-        self.model_selector['values'] = self.selected_model_names
+        # Populate both comparison selectors with GT + selected models
+        comp_values = ["Ground Truth"] + self.selected_model_names
+        self.model_selector_left['values'] = comp_values
+        self.model_selector_right['values'] = comp_values
+        
+        # Set defaults: Left=GT, Right=First Model (if available)
+        self.model_selector_left.set("Ground Truth")
+        if self.selected_model_names:
+            self.model_selector_right.set(self.selected_model_names[0])
+        else:
+            self.model_selector_right.set("Ground Truth")
+
         self.metrics_model_sel['values'] = self.selected_model_names
 
         for name in self.selected_model_names:
             self.build_model_config_ui(name)
+        
+        self.update_comparison()
 
     def build_model_config_ui(self, model_name):
         frame = ttk.LabelFrame(self.config_scrollable_frame, text=f"Config: {model_name}", padding=15)
@@ -882,57 +924,77 @@ class LICApp:
             self.img_selector['values'] = imgs
             if imgs: self.img_selector.current(0)
 
-    def update_comparison(self, event=None):
-        selected_img = self.img_selector.get()
-        model_name = self.model_selector.get()
+    def get_image_for_model(self, model_name, selected_img):
         gt_dir = os.path.expanduser(self.gt_dir_var.get().strip())
         out_base = os.path.expanduser(self.out_dir_var.get().strip())
-        if not selected_img or not model_name: return
-        gt_path = os.path.join(gt_dir, selected_img)
+
+        if model_name == "Ground Truth":
+            return os.path.join(gt_dir, selected_img)
+
         model_out = os.path.join(out_base, model_name, "reconstruction")
         if not os.path.exists(model_out):
             model_out = os.path.join(out_base, model_name)
+
         base_name = os.path.splitext(selected_img)[0]
-        found = None
+
         if os.path.exists(model_out):
             # Special handling for RwkvCompress subdirectory structure
             if model_name == "RwkvCompress":
                 q = "1" # Default fallback
                 if model_name in self.model_configs:
-                    q_val = self.model_configs[model_name]["args"].get("qualities")
+                    q_val = self.model_configs[model_name]["args"].get("quality")
+                    if not q_val: q_val = self.model_configs[model_name]["args"].get("qualities")
                     if q_val:
                         qs = q_val.get().split()
                         if qs: q = qs[0]
-                
+
                 recon_dir = os.path.join(model_out, f"quality_{q}", "reconstructions")
                 if os.path.exists(recon_dir):
                     for f in os.listdir(recon_dir):
                         if f.startswith(base_name) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
-                            found = os.path.join(recon_dir, f)
-                            break
+                            return os.path.join(recon_dir, f)
             else:
                 # Look for any file in model_out that starts with our base_name
-              for f in os.listdir(model_out):
-                  if f.startswith(base_name) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
-                      found = os.path.join(model_out, f)
-                      break
-                  if f == selected_img:
-                      found = os.path.join(model_out, f)
-                      break
-        if found:
-            self.comp_canvas.set_images(gt_path, found)
-            self.log(f"[Viewer] Loaded: {os.path.basename(found)}\n")
-        else:
-            self.comp_canvas.set_images(gt_path, None) 
-            self.log(f"[Viewer] Warning: No recon found for {base_name} in {model_name}.\n")
+                for f in os.listdir(model_out):
+                    if f.startswith(base_name) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                        return os.path.join(model_out, f)
+                    if f == selected_img:
+                        return os.path.join(model_out, f)
+        return None
+
+    def update_comparison(self, event=None):
+        selected_img = self.img_selector.get()
+        model_left = self.model_selector_left.get()
+        model_right = self.model_selector_right.get()
+
+        if not selected_img or not model_left or not model_right: 
+            return
+
+        path_left = self.get_image_for_model(model_left, selected_img)
+        path_right = self.get_image_for_model(model_right, selected_img)
+
+        # ComparisonCanvas.set_images(path_right, path_left, label_right, label_left)
+        # Note: Canvas labels mapping: image1=Right, image2=Left
+        self.comp_canvas.set_images(path_right, path_left, label1=model_right, label2=model_left)
+
+        if path_left and path_right:
+            self.log(f"[Viewer] Comparing: {model_left} vs {model_right} ({selected_img})\n")
+        elif not path_left and model_left != "Ground Truth":
+             self.log(f"[Viewer] Warning: No recon found for {selected_img} in {model_left}.\n")
+        elif not path_right and model_right != "Ground Truth":
+             self.log(f"[Viewer] Warning: No recon found for {selected_img} in {model_right}.\n")
 
     def show_current_metrics_popup(self):
         selected_img = self.img_selector.get()
-        model_name = self.model_selector.get()
-        if not selected_img or not model_name:
-            messagebox.showwarning("Warning", "Please select an image and model first.")
+        # Use the right side model for metrics by default if it's not GT
+        model_name = self.model_selector_right.get()
+        if model_name == "Ground Truth":
+            model_name = self.model_selector_left.get()
+
+        if not selected_img or not model_name or model_name == "Ground Truth":
+            messagebox.showwarning("Warning", "Please select an image and a valid model first.")
             return
-        if model_name not in self.metrics_data:
+        if model_name not in self.metrics_data:            
             messagebox.showinfo("Info", "No metrics available. Please run evaluation first.")
             return
         data = self.metrics_data[model_name]

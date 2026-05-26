@@ -630,8 +630,32 @@ class LICApp:
             final_args[target_key] = gt_dir
             model_out = os.path.abspath(os.path.join(output_base, model_name))
             os.makedirs(model_out, exist_ok=True)
-            final_args["save_dir"] = model_out
-            
+
+#             if model_name == "LIC-HPCM": final_args["save_dir"] = model_out
+#             elif model_name == "StableCodec":
+#                 final_args["rec_path"] = model_out
+#                 final_args["bin_path"] = os.path.join(model_out, "bins")
+#             elif model_name == "DCVC-RT": final_args["save_dir"] = model_out
+#             elif model_name == "ELIC": final_args["experiment"] = f"gui_eval_{model_name}"
+            if model_name == "RwkvCompress": 
+                final_args["save_dir"] = model_out
+                # Ensure only ONE quality is used in GUI mode for compatibility
+                if "qualities" in final_args:
+                    qs = final_args["qualities"]
+                    if isinstance(qs, str):
+                        qs = qs.split()
+                    if isinstance(qs, list) and len(qs) > 1:
+                        self.log(f"[GUI] Warning: RwkvCompress supports multiple qualities, but GUI only visualizes one. Using first quality: {qs[0]}\n")
+                        final_args["qualities"] = [qs[0]]
+                    if "checkpoints" in final_args:
+                        ckpts = final_args["checkpoints"]
+                        if isinstance(ckpts, str):
+                            ckpts = ckpts.split()
+                        if isinstance(ckpts, list) and len(ckpts) > 1:
+                            final_args["checkpoints"] = [ckpts[0]]
+            else:
+              final_args["save_dir"] = model_out
+
             # Derive or use custom model environment path
             user_model_env = config["env"].get().strip()
             if user_model_env:
@@ -707,6 +731,7 @@ class LICApp:
 
         subprocess.run = custom_run
         subprocess.check_call = custom_check_call
+
 
         try:
             for model_name, task_info in tasks.items():
@@ -870,13 +895,30 @@ class LICApp:
         base_name = os.path.splitext(selected_img)[0]
         found = None
         if os.path.exists(model_out):
-            for f in os.listdir(model_out):
-                if f.startswith(base_name) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
-                    found = os.path.join(model_out, f)
-                    break
-                if f == selected_img:
-                    found = os.path.join(model_out, f)
-                    break
+            # Special handling for RwkvCompress subdirectory structure
+            if model_name == "RwkvCompress":
+                q = "1" # Default fallback
+                if model_name in self.model_configs:
+                    q_val = self.model_configs[model_name]["args"].get("qualities")
+                    if q_val:
+                        qs = q_val.get().split()
+                        if qs: q = qs[0]
+                
+                recon_dir = os.path.join(model_out, f"quality_{q}", "reconstructions")
+                if os.path.exists(recon_dir):
+                    for f in os.listdir(recon_dir):
+                        if f.startswith(base_name) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                            found = os.path.join(recon_dir, f)
+                            break
+            else:
+                # Look for any file in model_out that starts with our base_name
+              for f in os.listdir(model_out):
+                  if f.startswith(base_name) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                      found = os.path.join(model_out, f)
+                      break
+                  if f == selected_img:
+                      found = os.path.join(model_out, f)
+                      break
         if found:
             self.comp_canvas.set_images(gt_path, found)
             self.log(f"[Viewer] Loaded: {os.path.basename(found)}\n")

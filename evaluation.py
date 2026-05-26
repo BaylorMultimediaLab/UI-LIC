@@ -58,9 +58,11 @@ def main():
         print(f"Error: Neither 'reconstructions' nor 'reconstruction' directory found in {base_save_path}")
         return
 
-    # Derive ssim_map dir from recon_dir parent
+    # Derive ssim_map and psnr_map dirs from recon_dir parent
     ssim_dir = os.path.join(os.path.dirname(recon_dir), "ssim_map")
+    psnr_map_dir = os.path.join(os.path.dirname(recon_dir), "psnr_map")
     os.makedirs(ssim_dir, exist_ok=True)
+    os.makedirs(psnr_map_dir, exist_ok=True)
 
     bits_dir = None
     for root, dirs, files in os.walk(base_save_path):
@@ -132,6 +134,21 @@ def main():
             
         ssim_map_img = Image.fromarray((np.clip(ssim_map_gray, 0, 1) * 255).astype(np.uint8))
         ssim_map_img.save(os.path.join(ssim_dir, f"{base_no_ext}.png"))
+        
+        # Calculate PSNR Map (per-pixel MSE)
+        # Scale range to 0-1 based on the maximum error in THIS image
+        mse_map = (gt_np - rec_np) ** 2
+        if len(mse_map.shape) == 3:
+            mse_map_gray = np.mean(mse_map, axis=2)
+        else:
+            mse_map_gray = mse_map
+            
+        max_val = np.max(mse_map_gray)
+        if max_val > 0:
+            mse_map_gray = mse_map_gray / max_val
+            
+        psnr_map_img = Image.fromarray((np.clip(mse_map_gray, 0, 1) * 255).astype(np.uint8))
+        psnr_map_img.save(os.path.join(psnr_map_dir, f"{base_no_ext}.png"))
         
         # Calculate YUV Metrics
         gt_yuv = rgb_to_yuv(gt)

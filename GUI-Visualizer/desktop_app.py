@@ -47,11 +47,14 @@ class ComparisonCanvas(tk.Canvas):
         self.bind("<B1-Motion>", self.on_drag)
         self.bind("<Button-1>", self.on_drag)
 
-    def set_images(self, path1, path2=None, overlay_path1=None, overlay_path2=None, label1="Right", label2="Left", metrics1="", metrics2="", show_metrics=True):
+    def set_images(self, path1, path2=None, overlay_path1=None, overlay_path2=None, 
+                   label1="Right", label2="Left", metrics1="", metrics2="", 
+                   show_metrics=True, invert_overlay=True):
         """
         path1: Right Image
         path2: Left Image
-        overlay_pathX: Path to SSIM map for blending
+        overlay_pathX: Path to error map for blending
+        invert_overlay: True for SSIM (brighter=good), False for PSNR/MSE (brighter=bad)
         """
         self.label1 = label1
         self.label2 = label2
@@ -68,18 +71,22 @@ class ComparisonCanvas(tk.Canvas):
                 return img
                 
             # Perform Blending
-            ssim_map = Image.open(map_path).convert("L")
-            if ssim_map.size != img.size:
-                ssim_map = ssim_map.resize(img.size, Image.LANCZOS)
+            error_map = Image.open(map_path).convert("L")
+            if error_map.size != img.size:
+                error_map = error_map.resize(img.size, Image.LANCZOS)
                 
-            # error = 1.0 - (ssim_val / 255.0)
-            # alpha = error * 0.8
-            # result = img * (1-alpha) + red * alpha
             import numpy as np
             img_np = np.array(img).astype(np.float32)
-            map_np = np.array(ssim_map).astype(np.float32) / 255.0
+            map_np = np.array(error_map).astype(np.float32) / 255.0
             
-            alpha = (1.0 - map_np) * 0.8
+            # alpha scaling: 0.8 represents greatest error
+            if invert_overlay:
+                # For SSIM: High value (1.0) = similar, Low value (0.0) = error
+                alpha = (1.0 - map_np) * 0.8
+            else:
+                # For PSNR/MSE: High value (1.0) = error, Low value (0.0) = similar
+                alpha = map_np * 0.8
+                
             alpha_3d = np.expand_dims(alpha, axis=2)
             
             red = np.zeros_like(img_np)
@@ -413,12 +420,14 @@ class LICApp:
         self.show_metrics_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(comp_controls, text="Show Metrics", variable=self.show_metrics_var, command=self.update_comparison).pack(side=tk.LEFT, padx=15)
 
-        self.show_ssim_map_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(comp_controls, text="Show SSIM Map", variable=self.show_ssim_map_var, command=self.toggle_ssim_options).pack(side=tk.LEFT, padx=15)
+        ttk.Label(comp_controls, text="Show Error:", font=self.F_BTN).pack(side=tk.LEFT, padx=(10, 5))
+        self.error_type_var = tk.StringVar(value="None")
+        self.error_selector = ttk.Combobox(comp_controls, state="readonly", width=8, textvariable=self.error_type_var, values=["None", "PSNR", "SSIM"], font=self.F_BASE)
+        self.error_selector.pack(side=tk.LEFT)
+        self.error_selector.bind("<<ComboboxSelected>>", self.toggle_error_options)
 
         self.ssim_overlay_var = tk.BooleanVar(value=True)
         self.ssim_overlay_check = ttk.Checkbutton(comp_controls, text="Overlay", variable=self.ssim_overlay_var, command=self.update_comparison)
-        # Initially hidden because show_ssim_map is False
         
         self.comp_canvas = ComparisonCanvas(self.compare_tab, bg="#1e1e1e", highlightthickness=0)
         self.comp_canvas.pack(fill=tk.BOTH, expand=True)
@@ -432,8 +441,8 @@ class LICApp:
         self.log_area.pack(fill=tk.BOTH, expand=True, pady=(20, 0))
         self.log_area.bind("<Key>", self.block_input)
 
-    def toggle_ssim_options(self):
-        if self.show_ssim_map_var.get():
+    def toggle_error_options(self, event=None):
+        if self.error_type_var.get() != "None":
             self.ssim_overlay_check.pack(side=tk.LEFT, padx=15)
         else:
             self.ssim_overlay_check.pack_forget()
@@ -1073,22 +1082,28 @@ class LICApp:
         if not selected_img or not model_left or not model_right: 
             return
 
-        show_ssim = self.show_ssim_map_var.get()
+        error_type = self.error_type_var.get()
         use_overlay = self.ssim_overlay_var.get()
         
+        show_error = (error_type != "None")
+        invert_overlay = (error_type == "SSIM")
+        
         # Determine base paths and overlay paths
-        if show_ssim and use_overlay:
-            # Base is reconstruction, overlay is ssim_map
+        subfolder = "reconstruction"
+        if show_error:
+            if error_type == "PSNR": subfolder = "psnr_map"
+            elif error_type == "SSIM": subfolder = "ssim_map"
+
+        if show_error and use_overlay:
+            # Base is reconstruction, overlay is the error map
             path_left = self.get_model_image_path(model_left, selected_img, "reconstruction")
             path_right = self.get_model_image_path(model_right, selected_img, "reconstruction")
-            
-            # NEVER show overlay on Ground Truth
-            overlay_left = self.get_model_image_path(model_left, selected_img, "ssim_map") if model_left != "Ground Truth" else None
-            overlay_right = self.get_model_image_path(model_right, selected_img, "ssim_map") if model_right != "Ground Truth" else None
-        elif show_ssim:
-            # Base is ssim_map directly
-            path_left = self.get_model_image_path(model_left, selected_img, "ssim_map")
-            path_right = self.get_model_image_path(model_right, selected_img, "ssim_map")
+            overlay_left = self.get_model_image_path(model_left, selected_img, subfolder) if model_left != "Ground Truth" else None
+            overlay_right = self.get_model_image_path(model_right, selected_img, subfolder) if model_right != "Ground Truth" else None
+        elif show_error:
+            # Base is the error map directly
+            path_left = self.get_model_image_path(model_left, selected_img, subfolder)
+            path_right = self.get_model_image_path(model_right, selected_img, subfolder)
             overlay_left = overlay_right = None
         else:
             # Standard reconstruction view
@@ -1105,12 +1120,13 @@ class LICApp:
             overlay_path1=overlay_right, overlay_path2=overlay_left,
             label1=model_right, label2=model_left,
             metrics1=metrics_right, metrics2=metrics_left,
-            show_metrics=show_m
+            show_metrics=show_m,
+            invert_overlay=invert_overlay
         )
 
         log_msg = f"[Viewer] Comparing: {model_left} vs {model_right} ({selected_img})"
-        if show_ssim: log_msg += " [SSIM Map]"
-        if show_ssim and use_overlay: log_msg += " [Overlay Mode]"
+        if show_error: log_msg += f" [{error_type} Map]"
+        if show_error and use_overlay: log_msg += " [Overlay Mode]"
         self.log(log_msg + "\n")
 
 if __name__ == "__main__":

@@ -65,10 +65,11 @@ def update_pip_requirements(env_path: str, requirements_file: str):
         return
 
     print(f"Ensuring dependencies from {requirements_file} in {env_path}...")
+    # Using 'python -m pip' instead of 'pip' command bypasses broken shebangs in env/bin/pip
     install_cmd = [
         "conda", "run",
         "--prefix", env_path,
-        "pip", "install", "-r", requirements_file
+        "python", "-m", "pip", "install", "-r", requirements_file
     ]
     
     try:

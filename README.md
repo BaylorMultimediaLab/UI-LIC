@@ -13,9 +13,9 @@ Each LIC model often requires a specific environment with distinct dependencies.
   ```bash
   python create-env.py
   ```
-- **Batch Setup (`quick-start-env.py`):** Use this to automatically create environments for ALL integrated models at once in a specified directory.
+- **Batch Setup (`quick-start-env.py`, recommended!) :** Use this to automatically create environments for ALL integrated models at once in a specified directory.
   ```bash
-  python quick-start-env.py [base_path]
+  python quick-start-env.py [optional base_path]
   ```
   This script uses the recommended Python versions and requirements files defined for each model automatically.
 

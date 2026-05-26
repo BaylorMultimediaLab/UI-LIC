@@ -389,6 +389,9 @@ class LICApp:
         self.show_metrics_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(comp_controls, text="Show Metrics", variable=self.show_metrics_var, command=self.update_comparison).pack(side=tk.LEFT, padx=15)
 
+        self.show_ssim_map_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(comp_controls, text="Show SSIM Map", variable=self.show_ssim_map_var, command=self.update_comparison).pack(side=tk.LEFT, padx=15)
+
         self.comp_canvas = ComparisonCanvas(self.compare_tab, bg="#1e1e1e", highlightthickness=0)
         self.comp_canvas.pack(fill=tk.BOTH, expand=True)
 
@@ -962,16 +965,19 @@ class LICApp:
     def get_image_for_model(self, model_name, selected_img):
         gt_dir = os.path.expanduser(self.gt_dir_var.get().strip())
         out_base = os.path.expanduser(self.out_dir_var.get().strip())
-
+        
         if model_name == "Ground Truth":
             return os.path.join(gt_dir, selected_img)
-
-        model_out = os.path.join(out_base, model_name, "reconstruction")
-        if not os.path.exists(model_out):
+            
+        use_ssim_map = self.show_ssim_map_var.get()
+        target_folder = "ssim_map" if use_ssim_map else "reconstruction"
+        
+        model_out = os.path.join(out_base, model_name, target_folder)
+        if not os.path.exists(model_out) and not use_ssim_map:
             model_out = os.path.join(out_base, model_name)
-
+            
         base_name = os.path.splitext(selected_img)[0]
-
+        
         if os.path.exists(model_out):
             # Special handling for RwkvCompress subdirectory structure
             if model_name == "RwkvCompress":
@@ -982,8 +988,8 @@ class LICApp:
                     if q_val:
                         qs = q_val.get().split()
                         if qs: q = qs[0]
-
-                recon_dir = os.path.join(model_out, f"quality_{q}", "reconstructions")
+                
+                recon_dir = os.path.join(out_base, model_name, f"quality_{q}", target_folder)
                 if os.path.exists(recon_dir):
                     for f in os.listdir(recon_dir):
                         if f.startswith(base_name) and f.lower().endswith(('.png', '.jpg', '.jpeg')):

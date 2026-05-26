@@ -3,9 +3,11 @@ import sys
 import json
 import argparse
 import torch
+import numpy as np
 from PIL import Image
 from torchvision import transforms
-from piq import psnr, ssim 
+from piq import psnr 
+from skimage.metrics import structural_similarity as ssim
 import lpips
 
 def get_bpp(bitstream_path, width, height):
@@ -56,6 +58,10 @@ def main():
         print(f"Error: Neither 'reconstructions' nor 'reconstruction' directory found in {base_save_path}")
         return
 
+    # Derive ssim_map dir from recon_dir parent
+    ssim_dir = os.path.join(os.path.dirname(recon_dir), "ssim_map")
+    os.makedirs(ssim_dir, exist_ok=True)
+
     bits_dir = None
     for root, dirs, files in os.walk(base_save_path):
         if "bitstreams" in dirs:
@@ -94,8 +100,11 @@ def main():
         if not gt_path:
             continue
 
-        gt = to_tensor(Image.open(gt_path).convert("RGB")).unsqueeze(0).to(device)
-        rec = to_tensor(Image.open(os.path.join(recon_dir, r_file)).convert("RGB")).unsqueeze(0).to(device)
+        gt_img = Image.open(gt_path).convert("RGB")
+        rec_img = Image.open(os.path.join(recon_dir, r_file)).convert("RGB")
+
+        gt = to_tensor(gt_img).unsqueeze(0).to(device)
+        rec = to_tensor(rec_img).unsqueeze(0).to(device)
 
         # Ensure shapes match perfectly
         h, w = min(gt.size(2), rec.size(2)), min(gt.size(3), rec.size(3))
@@ -103,8 +112,26 @@ def main():
 
         # Calculate RGB Metrics
         psnr_val = psnr(rec, gt, data_range=1.0).item()
-        ssim_val = ssim(rec, gt, data_range=1.0).item()
         lpips_val = loss_fn_alex(rec * 2 - 1, gt * 2 - 1).item()
+        
+        # SSIM with Map (scikit-image)
+        # Move to CPU/Numpy for skimage
+        gt_np = gt.squeeze().permute(1, 2, 0).cpu().numpy()
+        rec_np = rec.squeeze().permute(1, 2, 0).cpu().numpy()
+        
+        ssim_val, ssim_map = ssim(gt_np, rec_np, data_range=1.0, channel_axis=2, full=True)
+        
+        # Save SSIM Map as image
+        # Map values are -1 to 1. Map to 0-255 for visualization.
+        # High value (1.0) = white (similarity), Low = black (difference)
+        # ssim_map is [H, W, C]. We take mean across channels or just Y.
+        if len(ssim_map.shape) == 3:
+            ssim_map_gray = np.mean(ssim_map, axis=2)
+        else:
+            ssim_map_gray = ssim_map
+            
+        ssim_map_img = Image.fromarray((np.clip(ssim_map_gray, 0, 1) * 255).astype(np.uint8))
+        ssim_map_img.save(os.path.join(ssim_dir, f"{base_no_ext}.png"))
         
         # Calculate YUV Metrics
         gt_yuv = rgb_to_yuv(gt)
@@ -140,7 +167,7 @@ def main():
             "psnr_y": round(psnr_y, 4),
             "psnr_u": round(psnr_u, 4),
             "psnr_v": round(psnr_v, 4),
-            "ssim": round(ssim_val, 4),
+            "ssim": round(float(ssim_val), 4),
             "lpips": round(lpips_val, 4),
             "bpp": round(bpp_val, 4)
         })
@@ -150,7 +177,7 @@ def main():
     print(f"\n--- Final Results for {args.task_name} ---")
     for k, v in metrics.items():
         if v:
-            avg_val = sum(v) / len(v)
+            avg_val = float(sum(v) / len(v))
             averages[k] = round(avg_val, 4)
             print(f"Average {k.upper()}: {avg_val:.4f}")
         else:

@@ -42,7 +42,7 @@ class StableCodecTrainInterface(BaseInterface):
         "train_patch_size": 256,
         "train_batch_size": 8,
         "dataloader_num_workers": 4,
-        "output_dir": "experiments/StableCodec",
+        "output_dir": "LIC-Models/StableCodec/checkpoints",
         "enable_xformers_memory_efficient_attention": False,
         "gradient_checkpointing": False,
         "allow_tf32": False,

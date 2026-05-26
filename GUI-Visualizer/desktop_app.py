@@ -156,6 +156,7 @@ class LICApp:
 
     def setup_bindings(self):
         self.root.bind("<Control-plus>", self.zoom_in)
+        self.root.bind("<Control-equal>", self.zoom_in)
         self.root.bind("<Control-KP_Add>", self.zoom_in)
         self.root.bind("<Control-minus>", self.zoom_out)
         self.root.bind("<Control-KP_Subtract>", self.zoom_out)
@@ -533,7 +534,7 @@ class LICApp:
             # Filter what to show in non-advanced mode
             if not show_advanced:
                 # Always hide things that are standard defaults or handled elsewhere
-                if arg_name.lower() in ['cuda', 'experiment', 'test_batch_size', 'num_workers', 'real', 'clip_max_norm', 'save_dir', 'output']:
+                if arg_name.lower() in ['cuda', 'experiment', 'test_batch_size', 'num_workers', 'real', 'clip_max_norm', 'save_dir', 'output', 'train_dataset', 'test_dataset']:
                     continue
                 
                 # Only show if required, or if it doesn't have a default value in DEFAULT_VARS (meaning it's essential to provide)
@@ -554,11 +555,11 @@ class LICApp:
             
             # Autofill for checkpoints/models if empty
             if is_file and (not var.get() or var.get() == "None"):
-                workdir = config["workdir"].get()
+                workdir = os.path.join(ROOT_DIR, config["workdir"].get())
                 # Try common locations
                 search_dirs = [
-                    os.path.join(ROOT_DIR, workdir),
-                    os.path.join(ROOT_DIR, workdir, "checkpoints"),
+                    workdir,
+                    os.path.join(workdir, "checkpoints"),
                     os.path.join(ROOT_DIR, "checkpoints")
                 ]
                 found_files = []
@@ -617,9 +618,14 @@ class LICApp:
         eval_tasks = []
         for model_name in self.selected_model_names:
             config = self.model_configs[model_name]
-            final_args = {k: v.get() for k, v in config["args"].items()}
+            final_args = {}
+            for k, v in config["args"].items():
+                val = v.get()
+                if isinstance(val, str) and (os.path.sep in val or val.endswith(('.pth', '.pt', '.pkl', 'sd-turbo', 'elic.pth'))):
+                     val = os.path.abspath(os.path.join(ROOT_DIR, val))
+                final_args[k] = val
             interface_cls = self.registry[model_name]
-            data_keys = ['input', 'input_dir', 'data', 'dataset']
+            data_keys = ['input', 'input_dir', 'data', 'dataset', 'test_dataset', 'train_dataset']
             target_key = next((k for k in data_keys if k in interface_cls.REQUIRED_ARGS or k in getattr(interface_cls, 'DEFAULT_VARS', {})), "dataset")
             final_args[target_key] = gt_dir
             model_out = os.path.abspath(os.path.join(output_base, model_name))
@@ -669,9 +675,8 @@ class LICApp:
 
         original_input = builtins.input
         def custom_input(prompt=""):
-            self.log(f"{prompt} [Waiting for user popup...]\n")
-            messagebox.showinfo("Wait", prompt)
-            return "y"
+            self.log(f"{prompt} [Auto-skipping invalid path]\n")
+            return "skip"
         builtins.input = custom_input
 
         orig_run = subprocess.run
@@ -944,4 +949,11 @@ if __name__ == "__main__":
         print(f"[WARNING] Could not set scaling: {e}")
         
     app = LICApp(root)
+    
+    # Maximize window on startup
+    if sys.platform == "win32":
+        root.state('zoomed')
+    else:
+        root.attributes('-zoomed', True)
+        
     root.mainloop()

@@ -47,12 +47,15 @@ class Dispatcher:
                     except Exception as e:
                         print(f"  -> [WARNING] Failed to load {filename}: {e}")
 
-    def _validate_paths_interactive(self, args_dict):
+    def _validate_paths_interactive(self, args_dict, depth=0):
+        if depth >= 3:
+            return args_dict
+            
         # Keys that are almost always file system paths
         path_keys = {
             "dataset", "data", "input_dir", "input_dirs", 
             "checkpoint", "checkpoints", "save_dir", "output_dir", 
-            "data_dir", "log_dir", "sd_path", "elic_path"
+            "data_dir", "log_dir", "sd_path", "elic_path", "test_dataset", "train_dataset"
         }
         
         for k, v in args_dict.items():
@@ -72,7 +75,7 @@ class Dispatcher:
                     if new_path.lower() != 'skip' and new_path != "":
                         args_dict[k] = new_path
                         # Recursive check on the new path
-                        self._validate_paths_interactive({k: new_path})
+                        self._validate_paths_interactive({k: new_path}, depth + 1)
         return args_dict
 
     def _verify_crop_sizes(self, data_dir, crop_size):

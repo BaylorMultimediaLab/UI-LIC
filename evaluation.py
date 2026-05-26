@@ -34,9 +34,7 @@ def main():
     # 4. Set up paths adaptively
     base_save_path = os.path.expanduser(args.save_dir)
     
-    recon_dir = os.path.join(base_save_path, "reconstructions")
-    if not os.path.exists(recon_dir):
-        recon_dir = os.path.join(base_save_path, "reconstruction")
+    recon_dir = os.path.join(base_save_path, "reconstruction")
         
     bits_dir = os.path.join(base_save_path, "bitstreams")
     if not os.path.exists(bits_dir):

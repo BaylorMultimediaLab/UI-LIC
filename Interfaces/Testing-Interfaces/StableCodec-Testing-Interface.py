@@ -15,7 +15,7 @@ class StableCodecInterface(BaseInterface):
         "sd_path",
         "elic_path",
         "codec_path",
-        "img_path",
+        "test_dataset",
         "save_dir",
     ]
 
@@ -33,8 +33,8 @@ class StableCodecInterface(BaseInterface):
     DEFAULT_VARS = {
         "sd_path": "LIC-Models/StableCodec/sd-turbo",
         "elic_path": "LIC-Models/StableCodec/elic.pth",
-        "codec_path": None,
-        "img_path": None,
+        "codec_path": "None",
+        "test_dataset": None,
         "save_dir": None,
     }
 
@@ -45,7 +45,7 @@ class StableCodecInterface(BaseInterface):
         "sd_path": "--sd_path",
         "elic_path": "--elic_path",
         "codec_path": "--codec_path",
-        "img_path": "--img_path",
+        "test_dataset": "--img_path", # Mapping test_dataset to --img_path for StableCodec
 
         # derived automatically
         "rec_path": "--rec_path",
@@ -63,7 +63,7 @@ class StableCodecInterface(BaseInterface):
         # PATH ROBUSTNESS
         # -----------------------------
         # Ensure paths are absolute relative to project root before execution CWD changes
-        for key in ["sd_path", "elic_path", "codec_path", "img_path", "save_dir"]:
+        for key in ["sd_path", "elic_path", "codec_path", "test_dataset", "save_dir"]:
             if self.params.get(key):
                 self.params[key] = os.path.abspath(os.path.expanduser(self.params[key]))
 
@@ -74,7 +74,7 @@ class StableCodecInterface(BaseInterface):
         if not save_dir:
             raise ValueError("Missing save_dir")
 
-        rec_path = os.path.join(save_dir, "reconstructions")
+        rec_path = os.path.join(save_dir, "reconstruction")
         bin_path = os.path.join(save_dir, "bitstreams")
 
         self.params["rec_path"] = rec_path

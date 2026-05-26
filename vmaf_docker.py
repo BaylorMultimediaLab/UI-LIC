@@ -13,7 +13,7 @@ def check_docker_availability():
         if result.returncode == 0:
             return True, "Docker is available."
         else:
-            return False, "Docker is installed but the daemon might not be running."
+            return False, "Docker is installed, but the daemon isn't running or you lack permissions (try adding your user to the 'docker' group)."
     except FileNotFoundError:
         return False, "Docker command not found. Please install Docker to use VMAF."
     except Exception as e:
@@ -34,8 +34,14 @@ def calculate_vmaf(dist_path, ref_path, docker_image="mwader/static-ffmpeg"):
     if not os.path.exists(dist_path) or not os.path.exists(ref_path):
         return 0.0
 
-    dist_abs = os.path.abspath(dist_path)
-    ref_abs = os.path.abspath(ref_path)
+    # Get the clean, absolute path
+    dist_abs = os.path.abspath(os.path.normpath(dist_path))
+    ref_abs = os.path.abspath(os.path.normpath(ref_path))
+    
+    # Convert Windows backslashes to forward slashes for Docker CLI compatibility.
+    # This is safe for Linux/Mac as they already use forward slashes.
+    dist_abs = dist_abs.replace('\\', '/')
+    ref_abs = ref_abs.replace('\\', '/')
     
     cmd = [
         "docker", "run", "--rm",

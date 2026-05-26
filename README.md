@@ -133,9 +133,4 @@ The following models are integrated into the platform, each with a specialized i
 *Efficient Learned Image Compression via RWKV architecture*
 - **Recommended Python Version:** 3.10
 - **Strength:** Global dependency modeling with linear-attention computational efficiency.
-dware acceleration and fast parallel decoding.
 
-### **RwkvCompress**
-*Efficient Learned Image Compression via RWKV architecture*
-- **Recommended Python Version:** 3.10
-- **Strength:** Global dependency modeling with linear-attention computational efficiency.

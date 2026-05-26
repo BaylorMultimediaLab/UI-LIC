@@ -82,7 +82,8 @@ class BaseInterface:
                     
                 # Handle standard key-values
                 else:
-                    command.extend([cli_flag, str(val)])
+                    command.append(cli_flag)
+                    command.append(str(val))
                     
         return command
     

@@ -71,7 +71,11 @@ class Dispatcher:
                 # If it's an input/dataset/checkpoint, it MUST exist
                 elif not os.path.exists(path):
                     print(f"\n -> [WARNING] Path for '{k}' ('{path}') NOT FOUND.")
-                    new_path = input(f"    Please enter the correct path for '{k}' (or 'skip'): ").strip()
+                    if k == 'log_dir':
+                        new_path = 'skip'
+                    else:
+                        new_path = input(f"    Please enter the correct path for '{k}' (or 'skip'): ").strip()
+                    
                     if new_path.lower() != 'skip' and new_path != "":
                         args_dict[k] = new_path
                         # Recursive check on the new path

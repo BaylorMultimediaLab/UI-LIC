@@ -1018,9 +1018,15 @@ class LICApp:
                 iname = item.get("image_name", "")
                 if iname == selected_img or os.path.splitext(iname)[0] == base:
                     psnr = item.get("psnr", "N/A")
+                    py = item.get("psnr_y", "N/A")
+                    pu = item.get("psnr_u", "N/A")
+                    pv = item.get("psnr_v", "N/A")
                     ssim = item.get("ssim", "N/A")
                     bpp = item.get("bpp", "N/A")
-                    return f"PSNR: {psnr} | SSIM: {ssim} | bpp: {bpp}"
+                    
+                    line1 = f"PSNR: {psnr} | Y: {py} | U: {pu} | V: {pv}"
+                    line2 = f"SSIM: {ssim} | bpp: {bpp}"
+                    return f"{line1}\n{line2}"
         return ""
 
     def update_comparison(self, event=None):

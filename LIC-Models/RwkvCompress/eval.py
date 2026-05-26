@@ -202,7 +202,7 @@ def eval_model(model, quality, args):
     
     if args.save_dir:
         q_dir = os.path.join(args.save_dir, f"quality_{quality}")
-        recon_dir = os.path.join(q_dir, "reconstructions")
+        recon_dir = os.path.join(q_dir, "reconstruction")
         bit_dir = os.path.join(q_dir, "bitstreams")
         os.makedirs(recon_dir, exist_ok=True)
         os.makedirs(bit_dir, exist_ok=True)

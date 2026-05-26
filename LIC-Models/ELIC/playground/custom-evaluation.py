@@ -111,7 +111,7 @@ def main():
                 save_image(x_hat.clamp(0.0, 1.0), rec_file)
             # ---------------------------------------------------
 
-            logger_test.info(f"{img_name} | BPP: {img_bpp:.3f}")
+            logger_test.info(f"{img_name} | bpp: {img_bpp:.3f}")
 
 if __name__ == '__main__':
     main()

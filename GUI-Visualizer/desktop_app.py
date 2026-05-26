@@ -47,31 +47,55 @@ class ComparisonCanvas(tk.Canvas):
         self.bind("<B1-Motion>", self.on_drag)
         self.bind("<Button-1>", self.on_drag)
 
-    def set_images(self, path1, path2=None, label1="Right", label2="Left", metrics1="", metrics2="", show_metrics=True):
+    def set_images(self, path1, path2=None, overlay_path1=None, overlay_path2=None, label1="Right", label2="Left", metrics1="", metrics2="", show_metrics=True):
         """
         path1: Right Image
         path2: Left Image
+        overlay_pathX: Path to SSIM map for blending
         """
         self.label1 = label1
         self.label2 = label2
         self.metrics1 = metrics1
         self.metrics2 = metrics2
         self.show_metrics = show_metrics
-        try:
-            if path1 and os.path.exists(path1):
-                self.image1 = Image.open(path1).convert("RGB")
-            else:
-                self.image1 = None
+        
+        def load_and_blend(img_path, map_path):
+            if not img_path or not os.path.exists(img_path):
+                return None
+            
+            img = Image.open(img_path).convert("RGB")
+            if not map_path or not os.path.exists(map_path):
+                return img
+                
+            # Perform Blending
+            ssim_map = Image.open(map_path).convert("L")
+            if ssim_map.size != img.size:
+                ssim_map = ssim_map.resize(img.size, Image.LANCZOS)
+                
+            # error = 1.0 - (ssim_val / 255.0)
+            # alpha = error * 0.8
+            # result = img * (1-alpha) + red * alpha
+            import numpy as np
+            img_np = np.array(img).astype(np.float32)
+            map_np = np.array(ssim_map).astype(np.float32) / 255.0
+            
+            alpha = (1.0 - map_np) * 0.8
+            alpha_3d = np.expand_dims(alpha, axis=2)
+            
+            red = np.zeros_like(img_np)
+            red[:, :, 0] = 255.0
+            
+            blended = img_np * (1.0 - alpha_3d) + red * alpha_3d
+            return Image.fromarray(blended.astype(np.uint8))
 
-            if path2 and os.path.exists(path2):
-                self.image2 = Image.open(path2).convert("RGB")
-            else:
-                self.image2 = None
+        try:
+            self.image1 = load_and_blend(path1, overlay_path1)
+            self.image2 = load_and_blend(path2, overlay_path2)
 
             self.update_scaled_images()
             self.render()
         except Exception as e:
-            print(f"Error loading images: {e}")
+            print(f"Error loading/blending images: {e}")
 
     def on_resize(self, event):
         self.update_scaled_images()
@@ -390,8 +414,12 @@ class LICApp:
         ttk.Checkbutton(comp_controls, text="Show Metrics", variable=self.show_metrics_var, command=self.update_comparison).pack(side=tk.LEFT, padx=15)
 
         self.show_ssim_map_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(comp_controls, text="Show SSIM Map", variable=self.show_ssim_map_var, command=self.update_comparison).pack(side=tk.LEFT, padx=15)
+        ttk.Checkbutton(comp_controls, text="Show SSIM Map", variable=self.show_ssim_map_var, command=self.toggle_ssim_options).pack(side=tk.LEFT, padx=15)
 
+        self.ssim_overlay_var = tk.BooleanVar(value=True)
+        self.ssim_overlay_check = ttk.Checkbutton(comp_controls, text="Overlay", variable=self.ssim_overlay_var, command=self.update_comparison)
+        # Initially hidden because show_ssim_map is False
+        
         self.comp_canvas = ComparisonCanvas(self.compare_tab, bg="#1e1e1e", highlightthickness=0)
         self.comp_canvas.pack(fill=tk.BOTH, expand=True)
 
@@ -403,6 +431,13 @@ class LICApp:
         self.log_area = tk.Text(self.sidebar, height=8, font=self.F_LOG, bg="#ffffff", fg="#333333", highlightthickness=1, highlightbackground="#cccccc")
         self.log_area.pack(fill=tk.BOTH, expand=True, pady=(20, 0))
         self.log_area.bind("<Key>", self.block_input)
+
+    def toggle_ssim_options(self):
+        if self.show_ssim_map_var.get():
+            self.ssim_overlay_check.pack(side=tk.LEFT, padx=15)
+        else:
+            self.ssim_overlay_check.pack_forget()
+        self.update_comparison()
 
     def refresh_sidebar_and_models(self):
         """Toggle global path visibility and refresh model config views."""
@@ -939,7 +974,7 @@ class LICApp:
         avg = data.get("averages", {})
         runtime = data.get("runtime_seconds", "N/A")
         time_str = f"{runtime:.2f}s" if isinstance(runtime, (int, float)) else "N/A"
-        summary_text = f"PSNR: {avg.get('psnr', 'N/A')} dB | SSIM: {avg.get('ssim', 'N/A')} | LPIPS: {avg.get('lpips', 'N/A')} | BPP: {avg.get('bpp', 'N/A')} | Time: {time_str}"
+        summary_text = f"PSNR: {avg.get('psnr', 'N/A')} dB | SSIM: {avg.get('ssim', 'N/A')} | LPIPS: {avg.get('lpips', 'N/A')} | bpp: {avg.get('bpp', 'N/A')} | Time: {time_str}"
         self.summary_label.config(text=summary_text)
         
         for item in self.metrics_tree.get_children():
@@ -962,45 +997,40 @@ class LICApp:
             self.img_selector['values'] = imgs
             if imgs: self.img_selector.current(0)
 
-    def get_image_for_model(self, model_name, selected_img):
-        gt_dir = os.path.expanduser(self.gt_dir_var.get().strip())
-        out_base = os.path.expanduser(self.out_dir_var.get().strip())
-        
+    def get_model_image_path(self, model_name, selected_img, subfolder="reconstruction"):
         if model_name == "Ground Truth":
+            gt_dir = os.path.expanduser(self.gt_dir_var.get().strip())
             return os.path.join(gt_dir, selected_img)
             
-        use_ssim_map = self.show_ssim_map_var.get()
-        target_folder = "ssim_map" if use_ssim_map else "reconstruction"
-        
-        model_out = os.path.join(out_base, model_name, target_folder)
-        if not os.path.exists(model_out) and not use_ssim_map:
-            model_out = os.path.join(out_base, model_name)
+        out_base = os.path.expanduser(self.out_dir_var.get().strip())
+        model_out = os.path.join(out_base, model_name)
+        if not os.path.exists(model_out):
+            return None
             
         base_name = os.path.splitext(selected_img)[0]
         
-        if os.path.exists(model_out):
-            # Special handling for RwkvCompress subdirectory structure
-            if model_name == "RwkvCompress":
-                q = "1" # Default fallback
-                if model_name in self.model_configs:
-                    q_val = self.model_configs[model_name]["args"].get("quality")
-                    if not q_val: q_val = self.model_configs[model_name]["args"].get("qualities")
-                    if q_val:
-                        qs = q_val.get().split()
-                        if qs: q = qs[0]
-                
-                recon_dir = os.path.join(out_base, model_name, f"quality_{q}", target_folder)
-                if os.path.exists(recon_dir):
-                    for f in os.listdir(recon_dir):
-                        if f.startswith(base_name) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
-                            return os.path.join(recon_dir, f)
-            else:
-                # Look for any file in model_out that starts with our base_name
-                for f in os.listdir(model_out):
-                    if f.startswith(base_name) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
-                        return os.path.join(model_out, f)
-                    if f == selected_img:
-                        return os.path.join(model_out, f)
+        # 1. Check for standard subfolder (reconstruction, ssim_map)
+        target = os.path.join(model_out, subfolder)
+        if os.path.exists(target):
+            for f in os.listdir(target):
+                if (f == selected_img or f.startswith(base_name)) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    return os.path.join(target, f)
+        
+        # 2. Check for nested quality subfolders (RwkvCompress)
+        for q_dir in os.listdir(model_out):
+            if q_dir.startswith("quality_"):
+                target = os.path.join(model_out, q_dir, subfolder)
+                if os.path.exists(target):
+                    for f in os.listdir(target):
+                        if (f == selected_img or f.startswith(base_name)) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                            return os.path.join(target, f)
+                            
+        # 3. Fallback to model root for reconstruction
+        if subfolder == "reconstruction":
+            for f in os.listdir(model_out):
+                if (f == selected_img or f.startswith(base_name)) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    return os.path.join(model_out, f)
+        
         return None
 
     def get_metrics_string(self, model_name, selected_img, image_path):
@@ -1043,28 +1073,45 @@ class LICApp:
         if not selected_img or not model_left or not model_right: 
             return
 
-        path_left = self.get_image_for_model(model_left, selected_img)
-        path_right = self.get_image_for_model(model_right, selected_img)
+        show_ssim = self.show_ssim_map_var.get()
+        use_overlay = self.ssim_overlay_var.get()
         
+        # Determine base paths and overlay paths
+        if show_ssim and use_overlay:
+            # Base is reconstruction, overlay is ssim_map
+            path_left = self.get_model_image_path(model_left, selected_img, "reconstruction")
+            path_right = self.get_model_image_path(model_right, selected_img, "reconstruction")
+            
+            # NEVER show overlay on Ground Truth
+            overlay_left = self.get_model_image_path(model_left, selected_img, "ssim_map") if model_left != "Ground Truth" else None
+            overlay_right = self.get_model_image_path(model_right, selected_img, "ssim_map") if model_right != "Ground Truth" else None
+        elif show_ssim:
+            # Base is ssim_map directly
+            path_left = self.get_model_image_path(model_left, selected_img, "ssim_map")
+            path_right = self.get_model_image_path(model_right, selected_img, "ssim_map")
+            overlay_left = overlay_right = None
+        else:
+            # Standard reconstruction view
+            path_left = self.get_model_image_path(model_left, selected_img, "reconstruction")
+            path_right = self.get_model_image_path(model_right, selected_img, "reconstruction")
+            overlay_left = overlay_right = None
+
         show_m = self.show_metrics_var.get()
         metrics_left = self.get_metrics_string(model_left, selected_img, path_left)
         metrics_right = self.get_metrics_string(model_right, selected_img, path_right)
 
-        # ComparisonCanvas.set_images(path_right, path_left, label1=model_right, label2=model_left, ...)
-        # Note: Canvas labels mapping: image1=Right, image2=Left
         self.comp_canvas.set_images(
             path_right, path_left, 
+            overlay_path1=overlay_right, overlay_path2=overlay_left,
             label1=model_right, label2=model_left,
             metrics1=metrics_right, metrics2=metrics_left,
             show_metrics=show_m
         )
 
-        if path_left and path_right:
-            self.log(f"[Viewer] Comparing: {model_left} vs {model_right} ({selected_img})\n")
-        elif not path_left and model_left != "Ground Truth":
-             self.log(f"[Viewer] Warning: No recon found for {selected_img} in {model_left}.\n")
-        elif not path_right and model_right != "Ground Truth":
-             self.log(f"[Viewer] Warning: No recon found for {selected_img} in {model_right}.\n")
+        log_msg = f"[Viewer] Comparing: {model_left} vs {model_right} ({selected_img})"
+        if show_ssim: log_msg += " [SSIM Map]"
+        if show_ssim and use_overlay: log_msg += " [Overlay Mode]"
+        self.log(log_msg + "\n")
 
 if __name__ == "__main__":
     root = tk.Tk()

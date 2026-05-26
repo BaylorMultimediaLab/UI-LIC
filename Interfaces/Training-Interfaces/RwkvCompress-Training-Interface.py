@@ -83,3 +83,23 @@ class RwkvTrainInterface(BaseInterface):
         "lr_epoch": "--lr_epoch",
         "continue_train": "--continue_train"
     }
+
+    def __init__(self, job_args=None, global_args=None):
+        super().__init__(job_args, global_args)
+        
+        # Debugging
+        print(f"[DEBUG] RwkvTrainInterface init: params={self.params}")
+        
+        # Ensure rates are floats
+        if "learning_rate" in self.params:
+            self.params["learning_rate"] = float(self.params["learning_rate"])
+        if "aux_learning_rate" in self.params:
+            self.params["aux_learning_rate"] = float(self.params["aux_learning_rate"])
+            
+        # Ensure N and epochs are ints
+        if "N" in self.params:
+            self.params["N"] = int(self.params["N"])
+        if "epochs" in self.params:
+            self.params["epochs"] = int(self.params["epochs"])
+            
+        print(f"[DEBUG] RwkvTrainInterface after cast: lr={type(self.params['learning_rate'])}, aux_lr={type(self.params['aux_learning_rate'])}")

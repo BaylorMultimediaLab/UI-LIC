@@ -47,12 +47,15 @@ class Dispatcher:
                     except Exception as e:
                         print(f"  -> [WARNING] Failed to load {filename}: {e}")
 
-    def _validate_paths_interactive(self, args_dict):
+    def _validate_paths_interactive(self, args_dict, depth=0):
+        if depth >= 3:
+            return args_dict
+            
         # Keys that are almost always file system paths
         path_keys = {
             "dataset", "data", "input_dir", "input_dirs", 
             "checkpoint", "checkpoints", "save_dir", "output_dir", 
-            "data_dir", "log_dir"
+            "data_dir", "log_dir", "sd_path", "elic_path", "test_dataset", "train_dataset"
         }
         
         for k, v in args_dict.items():
@@ -68,11 +71,15 @@ class Dispatcher:
                 # If it's an input/dataset/checkpoint, it MUST exist
                 elif not os.path.exists(path):
                     print(f"\n -> [WARNING] Path for '{k}' ('{path}') NOT FOUND.")
-                    new_path = input(f"    Please enter the correct path for '{k}' (or 'skip'): ").strip()
+                    if k == 'log_dir':
+                        new_path = 'skip'
+                    else:
+                        new_path = input(f"    Please enter the correct path for '{k}' (or 'skip'): ").strip()
+                    
                     if new_path.lower() != 'skip' and new_path != "":
                         args_dict[k] = new_path
                         # Recursive check on the new path
-                        self._validate_paths_interactive({k: new_path})
+                        self._validate_paths_interactive({k: new_path}, depth + 1)
         return args_dict
 
     def _verify_crop_sizes(self, data_dir, crop_size):
@@ -252,7 +259,11 @@ class Dispatcher:
                 # 1. Resolve the evaluation environment
                 eval_env = eval_data.get("env_path", None)
                 if eval_env and eval_env != "n/a":
-                    python_exec = os.path.join(os.path.expanduser(eval_env), "bin", "python3")
+                    abs_eval_env = os.path.expanduser(eval_env)
+                    if os.path.isdir(os.path.join(abs_eval_env, "Scripts")):
+                        python_exec = os.path.join(abs_eval_env, "Scripts", "python.exe")
+                    else:
+                        python_exec = os.path.join(abs_eval_env, "bin", "python3")
                 else:
                     python_exec = sys.executable
 

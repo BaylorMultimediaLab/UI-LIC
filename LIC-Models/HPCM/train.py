@@ -317,7 +317,7 @@ def main(argv):
 
     import importlib
     net = importlib.import_module(f'.{args.model_name}', f'src.models').HPCM()
-    print(net)
+    # print(net)
     net = net.to(device)
 
     lr_scheduler = lambda x : \

@@ -79,8 +79,8 @@ def filesize(filepath: str) -> int:
     return Path(filepath).stat().st_size
 
 
-def torch2img(x: torch.Tensor) -> Image.Image:
-    return ToPILImage()(x.clamp_(0, 1).squeeze())
+def torch2img(x: torch.Tensor, idx=0) -> Image.Image:
+    return ToPILImage()(x[idx].clamp_(0, 1))
 
 
 class AverageMeter:

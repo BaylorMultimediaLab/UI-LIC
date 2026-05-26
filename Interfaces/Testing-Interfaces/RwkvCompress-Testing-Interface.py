@@ -10,7 +10,7 @@ class RwkvCompressTestInterface(BaseInterface):
     USE_MODULE_EXECUTION = False
     EXECUTION_PATH = "eval.py"
 
-    REQUIRED_ARGS = ["model", "checkpoints", "qualities", "input_dir", "save_dir"]
+    REQUIRED_ARGS = ["model", "checkpoint", "quality", "input_dir", "save_dir"]
 
     ACTION_FLAGS = ["cuda", "half", "real", "verbose"]
 
@@ -21,8 +21,8 @@ class RwkvCompressTestInterface(BaseInterface):
         "half": False,
         "real": True,
         "verbose": True,
-        "checkpoints": [],
-        "qualities": [],
+        "checkpoint": None,
+        "quality": "1",
         "input_dir": None,
         "save_dir": None,
         "result": "result.json"
@@ -35,11 +35,11 @@ class RwkvCompressTestInterface(BaseInterface):
         "m": "model",
         "model_name": "model",
 
-        "ckpt": "checkpoints",
-        "checkpoint": "checkpoints",
+        "ckpt": "checkpoint",
+        "checkpoints": "checkpoint",
 
-        "q": "qualities",
-        "quality": "qualities",
+        "q": "quality",
+        "qualities": "quality",
 
         "dataset": "input_dir",
         "test_dataset": "input_dir",
@@ -59,12 +59,12 @@ class RwkvCompressTestInterface(BaseInterface):
         "real": "--real",
         "verbose": "-v",
 
-        "checkpoints": "-p",
-        "qualities": "-q",
+        "checkpoint": "-p",
+        "quality": "-q",
 
         "input_dir": "-i",
         "save_dir": "-s",
-        "save_dir": "--save_dir",
+        "rec_path": "-s",
         "result": "-r",
     }
 
@@ -83,17 +83,15 @@ class RwkvCompressTestInterface(BaseInterface):
         Ensures list args (checkpoints/qualities) are properly formatted
         before execution.
         """
-        # Ensure checkpoints + qualities are lists (critical for argparse -p/-q nargs="*")
-        if isinstance(self.params.get("checkpoints"), str):
-            self.params["checkpoints"] = [self.params["checkpoints"]]
+        # Ensure checkpoint + quality are lists for the CLI (argparse -p/-q nargs="*")
+        if "checkpoint" in self.params:
+            ckpt = self.params["checkpoint"]
+            if not isinstance(ckpt, list):
+                self.params["checkpoint"] = [ckpt]
 
-        if isinstance(self.params.get("qualities"), str):
-            self.params["qualities"] = [self.params["qualities"]]
-
-        if not isinstance(self.params.get("checkpoints"), list):
-            raise ValueError("checkpoints must be a list")
-
-        if not isinstance(self.params.get("qualities"), list):
-            raise ValueError("qualities must be a list")
+        if "quality" in self.params:
+            q = self.params["quality"]
+            if not isinstance(q, list):
+                self.params["quality"] = [q]
 
         super().execute()

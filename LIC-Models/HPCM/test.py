@@ -176,9 +176,8 @@ def test(args):
             x_hat = crop(out_dec["x_hat"], (h,w))
             
             # --- ADDED FOR SAVING IMAGE ---
-            recon_dir = os.path.join(args.save_dir, "reconstructions")
+            recon_dir = os.path.join(args.save_dir, "reconstruction")
             os.makedirs(recon_dir, exist_ok=True)
-
             out_path = os.path.join(recon_dir, f"{img_name}")
             
         

@@ -6,7 +6,7 @@ import subprocess
 
 import importlib
 
-class LIC_HCPM_TrainInterface(BaseInterface):
+class LIC_HPCM_TrainInterface(BaseInterface):
 
     TASK_NAME = "HPCM"
     
@@ -27,9 +27,9 @@ class LIC_HCPM_TrainInterface(BaseInterface):
         "save"
     ]
 
-    # Derived from the explicit argparse usage inside the provided LIC-HCPM training script
+    # Derived from the explicit argparse usage inside the provided LIC-HPCM training script
     DEFAULT_VARS = {
-        "model_name": None,
+        "model_name": "HPCM_Base",
         "model_class": "hypers",
         "train_dataset": None,
         "test_dataset": None,
@@ -50,7 +50,7 @@ class LIC_HCPM_TrainInterface(BaseInterface):
         "checkpoint": None
     }
 
-    # Map unified standard names from your JSON to LIC-HCPM's specific variable names
+    # Map unified standard names from your JSON to LIC-HPCM's specific variable names
     ALIASES = {
         "lambda_rate": "lmbda",
         "lr": "learning_rate",
@@ -111,10 +111,14 @@ class LIC_HCPM_TrainInterface(BaseInterface):
                     elif len(parts) == 1:
                         self.params["patch_size"] = [int(parts[0]), int(parts[0])]
 
+    def execute(self):
+        self._check_compilation()
+        super().execute()
 
+    def _check_compilation(self):
         # --- RECOMMENDED HPCM C++ COMPILATION ---
         
-        task_root = "LIC-HPCM"
+        task_root = "LIC-Models/HPCM"
         destination_dir = os.path.join(task_root, "src/entropy_models")
         
         # Check physically on disk for the compiled .so file
@@ -137,7 +141,10 @@ class LIC_HCPM_TrainInterface(BaseInterface):
                     return
 
                 # Retrieve the explicit python environment path
-                target_env = self.params.get("env_path", "")
+                target_env = getattr(self, 'ENV_PATH', "")
+                if not target_env:
+                    target_env = self.params.get("env_path", "")
+                
                 target_env = os.path.abspath(os.path.expanduser(target_env))
                 env_python = os.path.join(target_env, "bin/python3")
 

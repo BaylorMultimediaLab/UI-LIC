@@ -19,7 +19,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--task_name", type=str, required=True)
     parser.add_argument("--save_dir", type=str, required=True)
-    parser.add_argument("--input_dirs", type=str, required=True)
+    parser.add_argument("--input_dir", type=str, required=True)
     args = parser.parse_args()
 
     # 2. Define Device FIRST
@@ -34,9 +34,7 @@ def main():
     # 4. Set up paths adaptively
     base_save_path = os.path.expanduser(args.save_dir)
     
-    recon_dir = os.path.join(base_save_path, "reconstructions")
-    if not os.path.exists(recon_dir):
-        recon_dir = os.path.join(base_save_path, "reconstruction")
+    recon_dir = os.path.join(base_save_path, "reconstruction")
         
     bits_dir = os.path.join(base_save_path, "bitstreams")
     if not os.path.exists(bits_dir):
@@ -64,7 +62,7 @@ def main():
         # Match cleanly with ground truth dataset images
         gt_path = None
         for ext in [".png", ".jpg", ".jpeg", ".PNG", ".JPG", ".JPEG"]:
-            candidate = os.path.join(args.input_dirs, base_no_ext + ext)
+            candidate = os.path.join(args.input_dir, base_no_ext + ext)
             if os.path.exists(candidate):
                 gt_path = candidate
                 break

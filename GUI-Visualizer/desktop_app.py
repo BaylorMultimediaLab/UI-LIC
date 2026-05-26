@@ -35,6 +35,9 @@ class ComparisonCanvas(tk.Canvas):
         self.image2 = None # Left Image
         self.label1 = "Right"
         self.label2 = "Left"
+        self.metrics1 = "" # Right metrics string
+        self.metrics2 = "" # Left metrics string
+        self.show_metrics = True
         self.scaled_img1 = None # Cached resize
         self.scaled_img2 = None # Cached resize
         self.tk_image = None
@@ -44,13 +47,16 @@ class ComparisonCanvas(tk.Canvas):
         self.bind("<B1-Motion>", self.on_drag)
         self.bind("<Button-1>", self.on_drag)
 
-    def set_images(self, path1, path2=None, label1="Right", label2="Left"):
+    def set_images(self, path1, path2=None, label1="Right", label2="Left", metrics1="", metrics2="", show_metrics=True):
         """
         path1: Right Image
         path2: Left Image
         """
         self.label1 = label1
         self.label2 = label2
+        self.metrics1 = metrics1
+        self.metrics2 = metrics2
+        self.show_metrics = show_metrics
         try:
             if path1 and os.path.exists(path1):
                 self.image1 = Image.open(path1).convert("RGB")
@@ -137,16 +143,30 @@ class ComparisonCanvas(tk.Canvas):
         self.create_image(offset_x, offset_y, anchor="nw", image=self.tk_image)
 
         canvas_font = ("sans-serif", 24, "bold")
+        metrics_font = ("sans-serif", 14, "bold")
 
         if self.scaled_img1 and self.scaled_img2:
             line_x = offset_x + split_x
             self.create_line(line_x, offset_y, line_x, offset_y + self.new_h, fill="#00ffff", width=5)
+
+            # Left Label
             self.create_text(offset_x + 20, offset_y + 20, text=self.label2.upper(), fill="#00ffff", anchor="nw", font=canvas_font)
+            if self.show_metrics and self.metrics2:
+                self.create_text(offset_x + 20, offset_y + 90, text=self.metrics2, fill="#00ffff", anchor="nw", font=metrics_font)
+
+            # Right Label
             self.create_text(offset_x + self.new_w - 20, offset_y + 20, text=self.label1.upper(), fill="#00ffff", anchor="ne", font=canvas_font)
+            if self.show_metrics and self.metrics1:
+                self.create_text(offset_x + self.new_w - 20, offset_y + 90, text=self.metrics1, fill="#00ffff", anchor="ne", font=metrics_font)
+
         elif self.scaled_img1:
             self.create_text(offset_x + self.new_w - 20, offset_y + 20, text=f"{self.label1.upper()} (ONLY)", fill="#ffcc00", anchor="ne", font=canvas_font)
+            if self.show_metrics and self.metrics1:
+                self.create_text(offset_x + self.new_w - 20, offset_y + 90, text=self.metrics1, fill="#ffcc00", anchor="ne", font=metrics_font)
         elif self.scaled_img2:
             self.create_text(offset_x + 20, offset_y + 20, text=f"{self.label2.upper()} (ONLY)", fill="#ffcc00", anchor="nw", font=canvas_font)
+            if self.show_metrics and self.metrics2:
+                self.create_text(offset_x + 20, offset_y + 90, text=self.metrics2, fill="#ffcc00", anchor="nw", font=metrics_font)
 class LICApp:
     def __init__(self, root):
         self.root = root
@@ -165,6 +185,7 @@ class LICApp:
         self.metrics_data = {} # {model_name: {averages: {}, per_image: []}}
         
         self.setup_ui()
+        self.load_metrics() # Added to load existing results on startup
         self.setup_bindings()
         self.poll_log_queue()
 
@@ -365,8 +386,8 @@ class LICApp:
         self.model_selector_right.pack(side=tk.LEFT, padx=5)
         self.model_selector_right.bind("<<ComboboxSelected>>", self.update_comparison)
 
-        self.metrics_btn = ttk.Button(comp_controls, text="Metrics", command=self.show_current_metrics_popup)
-        self.metrics_btn.pack(side=tk.LEFT, padx=10)
+        self.show_metrics_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(comp_controls, text="Show Metrics", variable=self.show_metrics_var, command=self.update_comparison).pack(side=tk.LEFT, padx=15)
 
         self.comp_canvas = ComparisonCanvas(self.compare_tab, bg="#1e1e1e", highlightthickness=0)
         self.comp_canvas.pack(fill=tk.BOTH, expand=True)
@@ -485,6 +506,10 @@ class LICApp:
             var.set(path)
             if check_images:
                 self.refresh_image_list()
+            
+            # Reload metrics if the output directory changed
+            if var == self.out_dir_var:
+                self.load_metrics()
 
     def browse_file(self, var):
         current = var.get()
@@ -852,17 +877,27 @@ class LICApp:
     def load_metrics(self):
         output_base = os.path.expanduser(self.out_dir_var.get().strip())
         self.metrics_data = {}
-        for model_name in self.selected_model_names:
-            metrics_file = os.path.join(output_base, model_name, f"{model_name}_metrics.json")
-            if os.path.exists(metrics_file):
-                try:
-                    with open(metrics_file, 'r') as f:
-                        self.metrics_data[model_name] = json.load(f)
-                except Exception as e:
-                    self.log(f"[ERROR] Failed to load metrics for {model_name}: {e}\n")
+        
+        if not os.path.exists(output_base):
+            return
+
+        # Scan all subdirectories in the output base for metrics files
+        for model_folder in os.listdir(output_base):
+            folder_path = os.path.join(output_base, model_folder)
+            if os.path.isdir(folder_path):
+                metrics_file = os.path.join(folder_path, f"{model_folder}_metrics.json")
+                if os.path.exists(metrics_file):
+                    try:
+                        with open(metrics_file, 'r') as f:
+                            self.metrics_data[model_folder] = json.load(f)
+                    except Exception as e:
+                        self.log(f"[ERROR] Failed to load metrics for {model_folder}: {e}\n")
+        
         if self.metrics_data:
-            first_model = list(self.metrics_data.keys())[0]
-            self.metrics_model_sel.set(first_model)
+            available_models = sorted(list(self.metrics_data.keys()))
+            self.metrics_model_sel['values'] = available_models
+            if not self.metrics_model_sel.get() or self.metrics_model_sel.get() not in self.metrics_data:
+                self.metrics_model_sel.set(available_models[0])
             self.refresh_metrics_display()
 
     def refresh_summary_report(self):
@@ -962,6 +997,32 @@ class LICApp:
                         return os.path.join(model_out, f)
         return None
 
+    def get_metrics_string(self, model_name, selected_img, image_path):
+        if model_name == "Ground Truth":
+            if image_path and os.path.exists(image_path):
+                try:
+                    with Image.open(image_path) as img:
+                        w, h = img.size
+                    size_bits = os.path.getsize(image_path) * 8
+                    bpp = size_bits / (w * h)
+                    return f"bpp: {bpp:.4f}"
+                except:
+                    return ""
+            return ""
+            
+        if model_name in self.metrics_data:
+            data = self.metrics_data[model_name]
+            # Match by full name or basename
+            base = os.path.splitext(selected_img)[0]
+            for item in data.get("per_image_metrics", []):
+                iname = item.get("image_name", "")
+                if iname == selected_img or os.path.splitext(iname)[0] == base:
+                    psnr = item.get("psnr", "N/A")
+                    ssim = item.get("ssim", "N/A")
+                    bpp = item.get("bpp", "N/A")
+                    return f"PSNR: {psnr} | SSIM: {ssim} | bpp: {bpp}"
+        return ""
+
     def update_comparison(self, event=None):
         selected_img = self.img_selector.get()
         model_left = self.model_selector_left.get()
@@ -972,10 +1033,19 @@ class LICApp:
 
         path_left = self.get_image_for_model(model_left, selected_img)
         path_right = self.get_image_for_model(model_right, selected_img)
+        
+        show_m = self.show_metrics_var.get()
+        metrics_left = self.get_metrics_string(model_left, selected_img, path_left)
+        metrics_right = self.get_metrics_string(model_right, selected_img, path_right)
 
-        # ComparisonCanvas.set_images(path_right, path_left, label_right, label_left)
+        # ComparisonCanvas.set_images(path_right, path_left, label1=model_right, label2=model_left, ...)
         # Note: Canvas labels mapping: image1=Right, image2=Left
-        self.comp_canvas.set_images(path_right, path_left, label1=model_right, label2=model_left)
+        self.comp_canvas.set_images(
+            path_right, path_left, 
+            label1=model_right, label2=model_left,
+            metrics1=metrics_right, metrics2=metrics_left,
+            show_metrics=show_m
+        )
 
         if path_left and path_right:
             self.log(f"[Viewer] Comparing: {model_left} vs {model_right} ({selected_img})\n")
@@ -983,45 +1053,6 @@ class LICApp:
              self.log(f"[Viewer] Warning: No recon found for {selected_img} in {model_left}.\n")
         elif not path_right and model_right != "Ground Truth":
              self.log(f"[Viewer] Warning: No recon found for {selected_img} in {model_right}.\n")
-
-    def show_current_metrics_popup(self):
-        selected_img = self.img_selector.get()
-        # Use the right side model for metrics by default if it's not GT
-        model_name = self.model_selector_right.get()
-        if model_name == "Ground Truth":
-            model_name = self.model_selector_left.get()
-
-        if not selected_img or not model_name or model_name == "Ground Truth":
-            messagebox.showwarning("Warning", "Please select an image and a valid model first.")
-            return
-        if model_name not in self.metrics_data:            
-            messagebox.showinfo("Info", "No metrics available. Please run evaluation first.")
-            return
-        data = self.metrics_data[model_name]
-        img_metrics = None
-        for item in data.get("per_image_metrics", []):
-            if item.get("image_name") == selected_img or item.get("image_name").startswith(os.path.splitext(selected_img)[0]):
-                img_metrics = item
-                break
-        popup = tk.Toplevel(self.root)
-        popup.title(f"Metrics: {selected_img}")
-        popup.geometry("400x350")
-        frame = ttk.Frame(popup, padding=20)
-        frame.pack(fill=tk.BOTH, expand=True)
-        ttk.Label(frame, text=f"Image: {selected_img}", style='Header.TLabel').pack(pady=(0, 15))
-        avg = data.get("averages", {})
-        def add_metric(name, value, avg_val):
-            row = ttk.Frame(frame)
-            row.pack(fill=tk.X, pady=5)
-            ttk.Label(row, text=f"{name}:", font=self.F_BTN, width=10).pack(side=tk.LEFT)
-            ttk.Label(row, text=str(value), font=self.F_BTN, foreground="#d9534f").pack(side=tk.LEFT)
-            ttk.Label(row, text=f" (Avg: {avg_val})", font=self.F_BASE).pack(side=tk.LEFT)
-        if img_metrics:
-            add_metric("PSNR", img_metrics.get("psnr"), avg.get("psnr"))
-            add_metric("SSIM", img_metrics.get("ssim"), avg.get("ssim"))
-            add_metric("LPIPS", img_metrics.get("lpips"), avg.get("lpips"))
-            add_metric("BPP", img_metrics.get("bpp"), avg.get("bpp"))
-        ttk.Button(frame, text="Close", command=popup.destroy).pack(pady=15)
 
 if __name__ == "__main__":
     root = tk.Tk()

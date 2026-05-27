@@ -1,46 +1,46 @@
 import os
-import subprocess
 from base_interface import BaseInterface
 
 class LICELICTestInterface(BaseInterface):
 
     TASK_NAME = "ELIC"
     
-    USE_MODULE_EXECUTION = True
-    EXECUTION_PATH = "playground.custom-evaluation" 
+    USE_MODULE_EXECUTION = False
+    EXECUTION_PATH = "Inference.py" 
     
     REQUIRED_ARGS = ["checkpoint", "dataset", "save_dir"]
-    ACTION_FLAGS = []
+    ACTION_FLAGS = ["cuda", "half", "entropy_estimation"]
 
     DEFAULT_VARS = {
         "checkpoint": None,
         "dataset": None,
         "save_dir": None,
         "cuda": True,
-        "experiment": "eval_run",
-        "test_batch_size": 1,
-        "num_workers": 1
+        "half": False,
+        "entropy_estimation": False,
+        "entropy_coder": "ans",
+        "patch": 256
     }
 
     ALIASES = {
-        "c": "checkpoint",
+        "c": "entropy_coder",
         "d": "dataset",
-        "data": "dataset",
         "test_dataset": "dataset",
+        "checkpoint": "checkpoint",
+        "p": "checkpoint",
         "output": "save_dir",
         "out": "save_dir"
     }
 
-    # Removed save_dir, added rec_path and bin_path
     CLI_MAPPING = {
-        "checkpoint": "--checkpoint",
+        "checkpoint": "--path",
         "dataset": "--dataset",
-        "experiment": "--experiment",
-        "test_batch_size": "--test-batch-size",
-        "num_workers": "-n",
+        "save_dir": "--output_path",
+        "entropy_coder": "--entropy-coder",
         "cuda": "--cuda",
-        "rec_path": "--rec_path",
-        "bin_path": "--bin_path"
+        "half": "--half",
+        "entropy_estimation": "--entropy-estimation",
+        "patch": "--patch"
     }
 
     def __init__(self, job_args=None, global_args=None):
@@ -50,20 +50,10 @@ class LICELICTestInterface(BaseInterface):
         if not self.params.get("dataset") and global_args and "test_dataset" in global_args:
             self.params["dataset"] = global_args["test_dataset"]
             
-        # Expand user paths ('~') for Linux shell compatibility
+        # Ensure paths are absolute or handled correctly
         for key in ["checkpoint", "dataset", "save_dir"]:
             if self.params.get(key):
-                self.params[key] = os.path.expanduser(self.params[key])
-
-        # --- SAVE_DIR → REC/BIN SPLIT (DCVC-RT Style) ---
-        if self.params.get("save_dir"):
-            base = self.params["save_dir"]
-
-            self.params["rec_path"] = os.path.join(base, "reconstruction")
-            self.params["bin_path"] = os.path.join(base, "bitstreams")
-
-            os.makedirs(self.params["rec_path"], exist_ok=True)
-            os.makedirs(self.params["bin_path"], exist_ok=True)
+                self.params[key] = os.path.abspath(os.path.expanduser(self.params[key]))
 
     def execute(self):
         super().execute()

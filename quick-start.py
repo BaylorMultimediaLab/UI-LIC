@@ -43,9 +43,9 @@ WEIGHTS_DATA = {
     },
     "ELIC": {
         "base_path": "LIC-Models/ELIC/weights/",
-        "description": "Auxiliary ELIC pretrained model used by StableCodec.",
+        "description": "Official ELIC pretrained model.",
         "options": [
-            {"name": "elic_unofficial.pth", "id": "1uuKQJiozcBfgGMJ8CfM6lrXOZWv6RUDN", "dest_name": "elic.pth", "desc": "Official ELIC auxiliary model"},
+            {"name": "elic_official.pth", "id": "1jUfYJdZd0-bYUsoOUWwEpI5t1MZYP3AP", "dest_name": "elic.pth", "desc": "Official ELIC model"},
         ]
     },
     "RwkvCompress": {

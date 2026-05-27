@@ -31,29 +31,78 @@ if ROOT_DIR not in sys.path:
 class ComparisonCanvas(tk.Canvas):
     def __init__(self, master, **kwargs):
         super().__init__(master, **kwargs)
-        self.image1 = None # GT
-        self.image2 = None # Compressed
+        self.image1 = None # Right Image
+        self.image2 = None # Left Image
+        self.label1 = "Right"
+        self.label2 = "Left"
+        self.metrics1 = "" # Right metrics string
+        self.metrics2 = "" # Left metrics string
+        self.show_metrics = True
         self.scaled_img1 = None # Cached resize
         self.scaled_img2 = None # Cached resize
         self.tk_image = None
         self.slider_pos = 0.5
-        
+
         self.bind("<Configure>", self.on_resize)
         self.bind("<B1-Motion>", self.on_drag)
         self.bind("<Button-1>", self.on_drag)
 
-    def set_images(self, path1, path2=None):
-        try:
-            self.image1 = Image.open(path1).convert("RGB")
-            if path2 and os.path.exists(path2):
-                self.image2 = Image.open(path2).convert("RGB")
-            else:
-                self.image2 = None
+    def set_images(self, path1, path2=None, overlay_path1=None, overlay_path2=None, 
+                   label1="Right", label2="Left", metrics1="", metrics2="", 
+                   show_metrics=True, invert_overlay=True):
+        """
+        path1: Right Image
+        path2: Left Image
+        overlay_pathX: Path to error map for blending
+        invert_overlay: True for SSIM (brighter=good), False for PSNR/MSE (brighter=bad)
+        """
+        self.label1 = label1
+        self.label2 = label2
+        self.metrics1 = metrics1
+        self.metrics2 = metrics2
+        self.show_metrics = show_metrics
+        
+        def load_and_blend(img_path, map_path):
+            if not img_path or not os.path.exists(img_path):
+                return None
+            
+            img = Image.open(img_path).convert("RGB")
+            if not map_path or not os.path.exists(map_path):
+                return img
                 
+            # Perform Blending
+            error_map = Image.open(map_path).convert("L")
+            if error_map.size != img.size:
+                error_map = error_map.resize(img.size, Image.LANCZOS)
+                
+            import numpy as np
+            img_np = np.array(img).astype(np.float32)
+            map_np = np.array(error_map).astype(np.float32) / 255.0
+            
+            # alpha scaling: 0.8 represents greatest error
+            if invert_overlay:
+                # For SSIM: High value (1.0) = similar, Low value (0.0) = error
+                alpha = (1.0 - map_np) * 0.8
+            else:
+                # For PSNR/MSE: High value (1.0) = error, Low value (0.0) = similar
+                alpha = map_np * 0.8
+                
+            alpha_3d = np.expand_dims(alpha, axis=2)
+            
+            red = np.zeros_like(img_np)
+            red[:, :, 0] = 255.0
+            
+            blended = img_np * (1.0 - alpha_3d) + red * alpha_3d
+            return Image.fromarray(blended.astype(np.uint8))
+
+        try:
+            self.image1 = load_and_blend(path1, overlay_path1)
+            self.image2 = load_and_blend(path2, overlay_path2)
+
             self.update_scaled_images()
             self.render()
         except Exception as e:
-            print(f"Error loading images: {e}")
+            print(f"Error loading/blending images: {e}")
 
     def on_resize(self, event):
         self.update_scaled_images()
@@ -61,20 +110,26 @@ class ComparisonCanvas(tk.Canvas):
 
     def update_scaled_images(self):
         """Perform the expensive LANCZOS resize only once per window resize or image load."""
-        if not self.image1: return
-        
+        if not self.image1 and not self.image2: return
+
+        # Use the first available image to determine ratio
+        base_img = self.image1 if self.image1 else self.image2
+
         w = self.winfo_width()
         h = self.winfo_height()
-        
+
         if w < 10 or h < 10: return
-        
-        img_w, img_h = self.image1.size
+
+        img_w, img_h = base_img.size
         ratio = min(w / img_w, h / img_h)
         self.new_w = int(img_w * ratio)
         self.new_h = int(img_h * ratio)
-        
-        self.scaled_img1 = self.image1.resize((self.new_w, self.new_h), Image.LANCZOS)
-        
+
+        if self.image1:
+            self.scaled_img1 = self.image1.resize((self.new_w, self.new_h), Image.LANCZOS)
+        else:
+            self.scaled_img1 = None
+
         if self.image2:
             self.scaled_img2 = self.image2.resize((self.new_w, self.new_h), Image.LANCZOS)
         else:
@@ -82,49 +137,67 @@ class ComparisonCanvas(tk.Canvas):
 
     def on_drag(self, event):
         width = self.winfo_width()
-        if width > 0 and self.scaled_img2: 
+        if width > 0 and self.scaled_img1 and self.scaled_img2: 
             self.slider_pos = max(0, min(1, event.x / width))
             self.render()
 
     def render(self):
-        if not getattr(self, 'scaled_img1', None):
+        if not self.scaled_img1 and not self.scaled_img2:
             return
 
         canvas_width = self.winfo_width()
         canvas_height = self.winfo_height()
-        
+
         combined = Image.new("RGB", (self.new_w, self.new_h))
-        
-        if self.scaled_img2:
+
+        if self.scaled_img1 and self.scaled_img2:
             split_x = int(self.new_w * self.slider_pos)
-            
+
             left_part = self.scaled_img2.crop((0, 0, split_x, self.new_h))
             right_part = self.scaled_img1.crop((split_x, 0, self.new_w, self.new_h))
-            
+
             combined.paste(left_part, (0, 0))
             combined.paste(right_part, (split_x, 0))
-        else:
+        elif self.scaled_img1:
             split_x = 0
             combined.paste(self.scaled_img1, (0, 0))
+        elif self.scaled_img2:
+            split_x = self.new_w
+            combined.paste(self.scaled_img2, (0, 0))
 
         self.tk_image = ImageTk.PhotoImage(combined)
         self.delete("all")
-        
+
         offset_x = (canvas_width - self.new_w) // 2
         offset_y = (canvas_height - self.new_h) // 2
-        
+
         self.create_image(offset_x, offset_y, anchor="nw", image=self.tk_image)
-        
+
         canvas_font = ("sans-serif", 24, "bold")
-        
-        if self.scaled_img2:
+        metrics_font = ("sans-serif", 14, "bold")
+
+        if self.scaled_img1 and self.scaled_img2:
             line_x = offset_x + split_x
             self.create_line(line_x, offset_y, line_x, offset_y + self.new_h, fill="#00ffff", width=5)
-            self.create_text(offset_x + 20, offset_y + 20, text="COMPRESSED", fill="#00ffff", anchor="nw", font=canvas_font)
-            self.create_text(offset_x + self.new_w - 20, offset_y + 20, text="GROUND TRUTH", fill="#00ffff", anchor="ne", font=canvas_font)
-        else:
-            self.create_text(offset_x + self.new_w - 20, offset_y + 20, text="GROUND TRUTH (Awaiting Output...)", fill="#ffcc00", anchor="ne", font=canvas_font)
 
+            # Left Label
+            self.create_text(offset_x + 20, offset_y + 20, text=self.label2.upper(), fill="#00ffff", anchor="nw", font=canvas_font)
+            if self.show_metrics and self.metrics2:
+                self.create_text(offset_x + 20, offset_y + 90, text=self.metrics2, fill="#00ffff", anchor="nw", font=metrics_font)
+
+            # Right Label
+            self.create_text(offset_x + self.new_w - 20, offset_y + 20, text=self.label1.upper(), fill="#00ffff", anchor="ne", font=canvas_font)
+            if self.show_metrics and self.metrics1:
+                self.create_text(offset_x + self.new_w - 20, offset_y + 90, text=self.metrics1, fill="#00ffff", anchor="ne", font=metrics_font)
+
+        elif self.scaled_img1:
+            self.create_text(offset_x + self.new_w - 20, offset_y + 20, text=f"{self.label1.upper()} (ONLY)", fill="#ffcc00", anchor="ne", font=canvas_font)
+            if self.show_metrics and self.metrics1:
+                self.create_text(offset_x + self.new_w - 20, offset_y + 90, text=self.metrics1, fill="#ffcc00", anchor="ne", font=metrics_font)
+        elif self.scaled_img2:
+            self.create_text(offset_x + 20, offset_y + 20, text=f"{self.label2.upper()} (ONLY)", fill="#ffcc00", anchor="nw", font=canvas_font)
+            if self.show_metrics and self.metrics2:
+                self.create_text(offset_x + 20, offset_y + 90, text=self.metrics2, fill="#ffcc00", anchor="nw", font=metrics_font)
 class LICApp:
     def __init__(self, root):
         self.root = root
@@ -143,6 +216,7 @@ class LICApp:
         self.metrics_data = {} # {model_name: {averages: {}, per_image: []}}
         
         self.setup_ui()
+        self.load_metrics() # Added to load existing results on startup
         self.setup_bindings()
         self.poll_log_queue()
 
@@ -305,8 +379,16 @@ class LICApp:
 
         self.config_canvas = tk.Canvas(self.config_tab, highlightthickness=0)
         self.config_scrollbar = ttk.Scrollbar(self.config_tab, orient="vertical", command=self.config_canvas.yview)
+        
+        # Static control area for non-dynamic settings
+        self.config_static_frame = ttk.Frame(self.config_tab, padding=5)
+        self.config_static_frame.pack(fill=tk.X, side=tk.TOP)
+        
+        self.equalize_var = tk.BooleanVar(value=True)
+        self.equalize_check = ttk.Checkbutton(self.config_static_frame, text="Equalize Bitrates", variable=self.equalize_var, command=self.on_equalize_toggle)
+        self.equalize_check.pack_forget() # Hidden by default
+        
         self.config_scrollable_frame = ttk.Frame(self.config_canvas)
-
         self.config_scrollable_frame.bind(
             "<Configure>",
             lambda e: self.config_canvas.configure(scrollregion=self.config_canvas.bbox("all"))
@@ -326,19 +408,38 @@ class LICApp:
         comp_controls = ttk.Frame(self.compare_tab)
         comp_controls.pack(fill=tk.X, pady=(0, 15))
 
-        ttk.Label(comp_controls, text="Select Image:", font=self.F_BTN).pack(side=tk.LEFT)
+        ttk.Label(comp_controls, text="Image:", font=self.F_BTN).pack(side=tk.LEFT)
         self.img_selector = ttk.Combobox(comp_controls, state="readonly", width=25, font=self.F_BASE)
         self.img_selector.pack(side=tk.LEFT, padx=(5, 15))
         self.img_selector.bind("<<ComboboxSelected>>", self.update_comparison)
 
-        ttk.Label(comp_controls, text="Select Model:", font=self.F_BTN).pack(side=tk.LEFT)
-        self.model_selector = ttk.Combobox(comp_controls, state="readonly", width=20, font=self.F_BASE)
-        self.model_selector.pack(side=tk.LEFT, padx=5)
-        self.model_selector.bind("<<ComboboxSelected>>", self.update_comparison)
+        ttk.Label(comp_controls, text="Left Side:", font=self.F_BTN).pack(side=tk.LEFT)
+        self.model_selector_left = ttk.Combobox(comp_controls, state="readonly", width=15, font=self.F_BASE, values=["Ground Truth"])
+        self.model_selector_left.set("Ground Truth")
+        self.model_selector_left.pack(side=tk.LEFT, padx=5)
+        self.model_selector_left.bind("<<ComboboxSelected>>", self.update_comparison)
 
-        self.metrics_btn = ttk.Button(comp_controls, text="Metrics", command=self.show_current_metrics_popup)
-        self.metrics_btn.pack(side=tk.LEFT, padx=10)
+        ttk.Label(comp_controls, text="Right Side:", font=self.F_BTN).pack(side=tk.LEFT)
+        self.model_selector_right = ttk.Combobox(comp_controls, state="readonly", width=15, font=self.F_BASE, values=["Ground Truth"])
+        self.model_selector_right.set("Ground Truth")
+        self.model_selector_right.pack(side=tk.LEFT, padx=5)
+        self.model_selector_right.bind("<<ComboboxSelected>>", self.update_comparison)
 
+        self.equalize_compare_check = ttk.Checkbutton(comp_controls, text="Equalize", variable=self.equalize_var, command=self.on_equalize_toggle)
+        # Initially hidden
+        
+        self.show_metrics_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(comp_controls, text="Show Metrics", variable=self.show_metrics_var, command=self.update_comparison).pack(side=tk.LEFT, padx=15)
+
+        ttk.Label(comp_controls, text="Show Error:", font=self.F_BTN).pack(side=tk.LEFT, padx=(10, 5))
+        self.error_type_var = tk.StringVar(value="None")
+        self.error_selector = ttk.Combobox(comp_controls, state="readonly", width=8, textvariable=self.error_type_var, values=["None", "PSNR", "SSIM"], font=self.F_BASE)
+        self.error_selector.pack(side=tk.LEFT)
+        self.error_selector.bind("<<ComboboxSelected>>", self.toggle_error_options)
+
+        self.ssim_overlay_var = tk.BooleanVar(value=True)
+        self.ssim_overlay_check = ttk.Checkbutton(comp_controls, text="Overlay", variable=self.ssim_overlay_var, command=self.update_comparison)
+        
         self.comp_canvas = ComparisonCanvas(self.compare_tab, bg="#1e1e1e", highlightthickness=0)
         self.comp_canvas.pack(fill=tk.BOTH, expand=True)
 
@@ -350,6 +451,43 @@ class LICApp:
         self.log_area = tk.Text(self.sidebar, height=8, font=self.F_LOG, bg="#ffffff", fg="#333333", highlightthickness=1, highlightbackground="#cccccc")
         self.log_area.pack(fill=tk.BOTH, expand=True, pady=(20, 0))
         self.log_area.bind("<Key>", self.block_input)
+
+    def on_equalize_toggle(self):
+        self.on_model_select() # Refresh UI to show/hide synchronized QPs
+
+    def sync_qp(self, source_var, *args):
+        if not self.equalize_var.get(): return
+        try:
+            new_val = source_var.get()
+        except:
+            return
+        standard_codecs = ["AVC", "HEVC", "AV1"]
+        for mname in self.selected_model_names:
+            if mname in standard_codecs:
+                qp_var = self.model_configs[mname]["args"].get("qp")
+                if qp_var and qp_var.get() != new_val:
+                    qp_var.set(new_val)
+
+    def sync_standard_qps(self):
+        if not self.equalize_var.get():
+            return
+        standard_codecs = ["AVC", "HEVC", "AV1"]
+        first_qp_var = None
+        for mname in self.selected_model_names:
+            if mname in standard_codecs:
+                qp_var = self.model_configs.get(mname, {}).get("args", {}).get("qp")
+                if qp_var:
+                    if first_qp_var is None:
+                        first_qp_var = qp_var
+                    elif qp_var.get() != first_qp_var.get():
+                        qp_var.set(first_qp_var.get())
+
+    def toggle_error_options(self, event=None):
+        if self.error_type_var.get() != "None":
+            self.ssim_overlay_check.pack(side=tk.LEFT, padx=15)
+        else:
+            self.ssim_overlay_check.pack_forget()
+        self.update_comparison()
 
     def refresh_sidebar_and_models(self):
         """Toggle global path visibility and refresh model config views."""
@@ -456,6 +594,10 @@ class LICApp:
             var.set(path)
             if check_images:
                 self.refresh_image_list()
+            
+            # Reload metrics if the output directory changed
+            if var == self.out_dir_var:
+                self.load_metrics()
 
     def browse_file(self, var):
         current = var.get()
@@ -473,11 +615,34 @@ class LICApp:
         selected_indices = self.model_listbox.curselection()
         self.selected_model_names = [self.model_listbox.get(i) for i in selected_indices]
 
-        self.model_selector['values'] = self.selected_model_names
+        # Populate both comparison selectors with GT + selected models
+        comp_values = ["Ground Truth"] + self.selected_model_names
+        self.model_selector_left['values'] = comp_values
+        self.model_selector_right['values'] = comp_values
+        
+        # Set defaults: Left=GT, Right=First Model (if available)
+        self.model_selector_left.set("Ground Truth")
+        if self.selected_model_names:
+            self.model_selector_right.set(self.selected_model_names[0])
+        else:
+            self.model_selector_right.set("Ground Truth")
+
         self.metrics_model_sel['values'] = self.selected_model_names
+
+        # Toggle equalize visibility
+        standard_codecs = ["AVC", "HEVC", "AV1"]
+        selected_standards = [m for m in self.selected_model_names if m in standard_codecs]
+        if len(selected_standards) >= 2:
+            self.equalize_check.pack(side=tk.TOP, pady=5)
+        else:
+            self.equalize_check.pack_forget()
 
         for name in self.selected_model_names:
             self.build_model_config_ui(name)
+
+        self.sync_standard_qps()
+        
+        self.update_comparison()
 
     def build_model_config_ui(self, model_name):
         frame = ttk.LabelFrame(self.config_scrollable_frame, text=f"Config: {model_name}", padding=15)
@@ -486,19 +651,25 @@ class LICApp:
         interface_cls = self.registry[model_name]
         required_args = getattr(interface_cls, 'REQUIRED_ARGS', [])
         show_advanced = self.show_advanced_var.get()
-
+        standard_codecs = ["AVC", "HEVC", "AV1"]
+        
         if model_name not in self.model_configs:
+            # Set workdir to LIC-Models for standard codecs, otherwise LIC-Models/Name
+            workdir_val = "LIC-Models" if model_name in standard_codecs else f"LIC-Models/{model_name}"
+
             self.model_configs[model_name] = {
                 "args": {},
-                "workdir": tk.StringVar(value=f"LIC-Models/{model_name}"),
+                "workdir": tk.StringVar(value=workdir_val),
                 "env": tk.StringVar()
             }
 
             defaults = getattr(interface_cls, 'DEFAULT_VARS', {})
             for k, v in defaults.items():
                 if k in ['data', 'dataset', 'input', 'input_dir', 'save_dir', 'output']: continue
-                self.model_configs[model_name]["args"][k] = tk.StringVar(value="" if v is None else str(v))
-
+                var = tk.StringVar(value="" if v is None else str(v))
+                if model_name in standard_codecs and k == "qp":
+                    var.trace_add("write", lambda *args, v=var: self.sync_qp(v, *args))
+                self.model_configs[model_name]["args"][k] = var
             for req in required_args:
                 if req in ['data', 'dataset', 'input', 'input_dir', 'save_dir', 'output']: continue
                 if req not in self.model_configs[model_name]["args"]:
@@ -533,18 +704,22 @@ class LICApp:
         for arg_name, var in config["args"].items():
             # Filter what to show in non-advanced mode
             if not show_advanced:
-                # Always hide things that are standard defaults or handled elsewhere
-                if arg_name.lower() in ['cuda', 'experiment', 'test_batch_size', 'num_workers', 'real', 'clip_max_norm', 'save_dir', 'output', 'train_dataset', 'test_dataset']:
-                    continue
-                
-                # Only show if required, or if it doesn't have a default value in DEFAULT_VARS (meaning it's essential to provide)
-                is_required = arg_name in required_args
-                has_default = arg_name in getattr(interface_cls, 'DEFAULT_VARS', {})
-                
-                # If it's not required and has a default, skip it in simple mode
-                if not is_required and has_default:
-                    continue
+                # For standard codecs, only show QP and Use GPU
+                if model_name in ["AVC", "HEVC", "AV1"]:
+                    if arg_name.lower() not in ["qp", "use_gpu"]:
+                        continue
+                else:
+                    # Always hide things that are standard defaults or handled elsewhere
+                    if arg_name.lower() in ['cuda', 'experiment', 'test_batch_size', 'num_workers', 'real', 'clip_max_norm', 'save_dir', 'output', 'train_dataset', 'test_dataset']:
+                        continue
 
+                    # Only show if required, or if it doesn't have a default value in DEFAULT_VARS (meaning it's essential to provide)
+                    is_required = arg_name in required_args
+                    has_default = arg_name in getattr(interface_cls, 'DEFAULT_VARS', {})
+
+                    # If it's not required and has a default, skip it in simple mode
+                    if not is_required and has_default:
+                        continue
             arg_lower = arg_name.lower()
             is_file = any(x in arg_lower for x in ['checkpoint', 'model', 'file', 'elic', 'codec', 'pth', 'pkl', 'weights'])
             is_dir = any(x in arg_lower for x in ['dir', 'dataset', 'folder', 'save'])
@@ -614,8 +789,14 @@ class LICApp:
             return None
 
         output_base = os.path.expanduser(self.out_dir_var.get().strip())
+        standard_codecs = ["AVC", "HEVC", "AV1"]
+        selected_standards = [m for m in self.selected_model_names if m in standard_codecs]
+        learning_models = [m for m in self.selected_model_names if m not in standard_codecs]
+        equalize_enabled = self.equalize_var.get() and len(selected_standards) >= 2
         tasks = {}
         eval_tasks = []
+        standard_equalize_config = None
+        standard_use_gpu = None
         for model_name in self.selected_model_names:
             config = self.model_configs[model_name]
             final_args = {}
@@ -680,12 +861,28 @@ class LICApp:
                 "input_dir": gt_dir
             })
 
+            if model_name in standard_codecs and equalize_enabled:
+                if standard_equalize_config is None:
+                    standard_equalize_config = {
+                        "codec_list": ",".join(selected_standards),
+                        "qp": final_args.get("qp"),
+                        "use_gpu": final_args.get("use_gpu"),
+                        "input_dir": gt_dir,
+                        "save_dir": model_out,
+                        "workdir": os.path.join(ROOT_DIR, config["workdir"].get()),
+                        "env_path": model_env if model_env and os.path.exists(model_env) else None
+                    }
+                    standard_use_gpu = final_args.get("use_gpu")
+                else:
+                    if standard_use_gpu != final_args.get("use_gpu"):
+                        self.log("[GUI] Warning: Equalize enabled, but standard codecs have different 'use_gpu' values. Using the first codec's setting.\n")
+
         # Derive eval environment path
         eval_env_path = find_env("eval-env")
         if not eval_env_path or not os.path.exists(eval_env_path):
              self.log(f"[WARNING] Evaluation environment 'eval-env' not found.\n")
              if not self.show_advanced_var.get():
-                self.log("[HINT] Evaluation requires 'evaluation.py' to run in a specific environment. Ensure it was created via quick-start-env.py or set it in Advanced Mode.\n")
+                self.log("[HINT] Evaluation requires 'evaluation.py' to run in a specific environment. Ensure it was created via quick-start.py or set it in Advanced Mode.\n")
 
         # Track total run time per model
         model_timings = {}
@@ -733,11 +930,116 @@ class LICApp:
         subprocess.check_call = custom_check_call
 
 
+        def build_learning_target_map():
+            target_map = {}
+            for model_name in learning_models:
+                metrics_path = os.path.join(output_base, model_name, f"{model_name}_metrics.json")
+                if not os.path.exists(metrics_path):
+                    self.log(f"[GUI] Warning: Metrics not found for {model_name}; skipping as target source.\n")
+                    continue
+                try:
+                    with open(metrics_path, "r") as f:
+                        data = json.load(f)
+                except Exception as e:
+                    self.log(f"[GUI] Warning: Failed to read metrics for {model_name}: {e}\n")
+                    continue
+                for item in data.get("per_image_metrics", []):
+                    img_name = item.get("image_name")
+                    bpp_val = item.get("bpp")
+                    if not img_name or not isinstance(bpp_val, (int, float)):
+                        continue
+                    base = os.path.splitext(img_name)[0]
+                    if base not in target_map or bpp_val < target_map[base]:
+                        target_map[base] = bpp_val
+            return target_map
+
         try:
-            for model_name, task_info in tasks.items():
+            standard_equalized = False
+            standard_elapsed = 0.0
+            target_bpp_json = None
+            ordered_models = list(self.selected_model_names)
+            if equalize_enabled and learning_models:
+                ordered_models = learning_models + [m for m in self.selected_model_names if m in standard_codecs]
+
+            for model_name in ordered_models:
+                task_info = tasks[model_name]
                 start_t = time.time()
                 self.log(f"\n[GUI] Starting Task: {model_name}...\n")
-                
+
+                if equalize_enabled and model_name in standard_codecs:
+                    if not standard_equalized:
+                        if not standard_equalize_config:
+                            self.log("[GUI ERROR] Equalize enabled, but no standard codec config was found.\n")
+                            raise RuntimeError("Missing standard codec config for equalization")
+
+                        if learning_models and not target_bpp_json:
+                            target_map = build_learning_target_map()
+                            if target_map:
+                                target_bpp_json = os.path.join(output_base, "standard_equalize_targets.json")
+                                with open(target_bpp_json, "w") as f:
+                                    json.dump(target_map, f, indent=4)
+                                self.log("[GUI] Using learning-based bpp targets for standard codec equalization.\n")
+                            else:
+                                self.log("[GUI] Warning: No learning-based bpp targets found; using standard anchor only.\n")
+                        
+                        python_exec = sys.executable
+                        env_path = standard_equalize_config.get("env_path")
+                        if env_path:
+                            if os.path.isdir(os.path.join(env_path, "Scripts")):
+                                python_exec = os.path.join(env_path, "Scripts", "python.exe")
+                            else:
+                                python_exec = os.path.join(env_path, "bin", "python3")
+
+                        cmd = [
+                            python_exec,
+                            os.path.join(ROOT_DIR, "LIC-Models", "Standard-Codecs", "eval_standard.py"),
+                            "--codec", standard_equalize_config["codec_list"],
+                            "--qp", str(standard_equalize_config["qp"]),
+                            "--input_dir", standard_equalize_config["input_dir"],
+                            "--save_dir", standard_equalize_config["save_dir"]
+                        ]
+                        if standard_equalize_config.get("use_gpu"):
+                            cmd.append("--use_gpu")
+                        if target_bpp_json:
+                            cmd.extend(["--target_bpp_json", target_bpp_json])
+                        cmd.append("--equalize")
+
+                        self.log(f"[GUI] Equalizing standard codecs: {standard_equalize_config['codec_list']}\n")
+                        subprocess.run(cmd, cwd=standard_equalize_config.get("workdir"))
+                        standard_elapsed = time.time() - start_t
+                        standard_equalized = True
+
+                    # Run evaluation for this specific model immediately to get metrics
+                    this_eval_env = eval_env_path if os.path.exists(eval_env_path) else "n/a"
+                    python_exec = sys.executable
+                    if this_eval_env != "n/a":
+                        if os.path.isdir(os.path.join(this_eval_env, "Scripts")):
+                            python_exec = os.path.join(this_eval_env, "Scripts", "python.exe")
+                        else:
+                            python_exec = os.path.join(this_eval_env, "bin", "python3")
+
+                    eval_job = next(j for j in eval_tasks if j["task_name"] == model_name)
+                    cmd = [
+                        python_exec, os.path.join(ROOT_DIR, "evaluation.py"),
+                        "--task_name", model_name,
+                        "--save_dir", eval_job["save_dir"],
+                        "--input_dir", eval_job["input_dir"]
+                    ]
+                    subprocess.run(cmd)
+
+                    model_timings[model_name] = standard_elapsed
+
+                    # Update the metrics file with timing info
+                    metrics_file = os.path.join(eval_job["save_dir"], f"{model_name}_metrics.json")
+                    if os.path.exists(metrics_file):
+                        with open(metrics_file, 'r') as f:
+                            m_data = json.load(f)
+                        m_data["runtime_seconds"] = standard_elapsed
+                        with open(metrics_file, 'w') as f:
+                            json.dump(m_data, f, indent=4)
+
+                    continue
+
                 # Create a temporary single-task config for the dispatcher
                 temp_config = {
                     "testing": {
@@ -810,17 +1112,27 @@ class LICApp:
     def load_metrics(self):
         output_base = os.path.expanduser(self.out_dir_var.get().strip())
         self.metrics_data = {}
-        for model_name in self.selected_model_names:
-            metrics_file = os.path.join(output_base, model_name, f"{model_name}_metrics.json")
-            if os.path.exists(metrics_file):
-                try:
-                    with open(metrics_file, 'r') as f:
-                        self.metrics_data[model_name] = json.load(f)
-                except Exception as e:
-                    self.log(f"[ERROR] Failed to load metrics for {model_name}: {e}\n")
+        
+        if not os.path.exists(output_base):
+            return
+
+        # Scan all subdirectories in the output base for metrics files
+        for model_folder in os.listdir(output_base):
+            folder_path = os.path.join(output_base, model_folder)
+            if os.path.isdir(folder_path):
+                metrics_file = os.path.join(folder_path, f"{model_folder}_metrics.json")
+                if os.path.exists(metrics_file):
+                    try:
+                        with open(metrics_file, 'r') as f:
+                            self.metrics_data[model_folder] = json.load(f)
+                    except Exception as e:
+                        self.log(f"[ERROR] Failed to load metrics for {model_folder}: {e}\n")
+        
         if self.metrics_data:
-            first_model = list(self.metrics_data.keys())[0]
-            self.metrics_model_sel.set(first_model)
+            available_models = sorted(list(self.metrics_data.keys()))
+            self.metrics_model_sel['values'] = available_models
+            if not self.metrics_model_sel.get() or self.metrics_model_sel.get() not in self.metrics_data:
+                self.metrics_model_sel.set(available_models[0])
             self.refresh_metrics_display()
 
     def refresh_summary_report(self):
@@ -859,7 +1171,7 @@ class LICApp:
         avg = data.get("averages", {})
         runtime = data.get("runtime_seconds", "N/A")
         time_str = f"{runtime:.2f}s" if isinstance(runtime, (int, float)) else "N/A"
-        summary_text = f"PSNR: {avg.get('psnr', 'N/A')} dB | SSIM: {avg.get('ssim', 'N/A')} | LPIPS: {avg.get('lpips', 'N/A')} | BPP: {avg.get('bpp', 'N/A')} | Time: {time_str}"
+        summary_text = f"PSNR: {avg.get('psnr', 'N/A')} dB | SSIM: {avg.get('ssim', 'N/A')} | LPIPS: {avg.get('lpips', 'N/A')} | bpp: {avg.get('bpp', 'N/A')} | Time: {time_str}"
         self.summary_label.config(text=summary_text)
         
         for item in self.metrics_tree.get_children():
@@ -882,84 +1194,131 @@ class LICApp:
             self.img_selector['values'] = imgs
             if imgs: self.img_selector.current(0)
 
+    def get_model_image_path(self, model_name, selected_img, subfolder="reconstruction"):
+        if model_name == "Ground Truth":
+            gt_dir = os.path.expanduser(self.gt_dir_var.get().strip())
+            return os.path.join(gt_dir, selected_img)
+            
+        out_base = os.path.expanduser(self.out_dir_var.get().strip())
+        model_out = os.path.join(out_base, model_name)
+        if not os.path.exists(model_out):
+            return None
+            
+        base_name = os.path.splitext(selected_img)[0]
+        
+        # 1. Check for standard subfolder (reconstruction, ssim_map)
+        target = os.path.join(model_out, subfolder)
+        if os.path.exists(target):
+            for f in os.listdir(target):
+                if (f == selected_img or f.startswith(base_name)) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    return os.path.join(target, f)
+        
+        # 2. Check for nested quality subfolders (RwkvCompress)
+        for q_dir in os.listdir(model_out):
+            if q_dir.startswith("quality_"):
+                target = os.path.join(model_out, q_dir, subfolder)
+                if os.path.exists(target):
+                    for f in os.listdir(target):
+                        if (f == selected_img or f.startswith(base_name)) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                            return os.path.join(target, f)
+                            
+        # 3. Fallback to model root for reconstruction
+        if subfolder == "reconstruction":
+            for f in os.listdir(model_out):
+                if (f == selected_img or f.startswith(base_name)) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    return os.path.join(model_out, f)
+        
+        return None
+
+    def get_metrics_string(self, model_name, selected_img, image_path):
+        if model_name == "Ground Truth":
+            if image_path and os.path.exists(image_path):
+                try:
+                    with Image.open(image_path) as img:
+                        w, h = img.size
+                    size_bits = os.path.getsize(image_path) * 8
+                    bpp = size_bits / (w * h)
+                    return f"bpp: {bpp:.4f}"
+                except:
+                    return ""
+            return ""
+            
+        if model_name in self.metrics_data:
+            data = self.metrics_data[model_name]
+            # Match by full name or basename
+            base = os.path.splitext(selected_img)[0]
+            for item in data.get("per_image_metrics", []):
+                iname = item.get("image_name", "")
+                if iname == selected_img or os.path.splitext(iname)[0] == base:
+                    psnr = item.get("psnr", "N/A")
+                    py = item.get("psnr_y", "N/A")
+                    pu = item.get("psnr_u", "N/A")
+                    pv = item.get("psnr_v", "N/A")
+                    ssim = item.get("ssim", "N/A")
+                    bpp = item.get("bpp", "N/A")
+                    qp = item.get("qp", None)
+                    
+                    line1 = f"PSNR: {psnr} | Y: {py} | U: {pu} | V: {pv}"
+                    line2 = f"SSIM: {ssim} | bpp: {bpp}"
+                    if qp not in (None, "", "N/A"):
+                        line2 += f" | qp: {qp}"
+                    return f"{line1}\n{line2}"
+        return ""
+
     def update_comparison(self, event=None):
         selected_img = self.img_selector.get()
-        model_name = self.model_selector.get()
-        gt_dir = os.path.expanduser(self.gt_dir_var.get().strip())
-        out_base = os.path.expanduser(self.out_dir_var.get().strip())
-        if not selected_img or not model_name: return
-        gt_path = os.path.join(gt_dir, selected_img)
-        model_out = os.path.join(out_base, model_name, "reconstruction")
-        if not os.path.exists(model_out):
-            model_out = os.path.join(out_base, model_name)
-        base_name = os.path.splitext(selected_img)[0]
-        found = None
-        if os.path.exists(model_out):
-            # Special handling for RwkvCompress subdirectory structure
-            if model_name == "RwkvCompress":
-                q = "1" # Default fallback
-                if model_name in self.model_configs:
-                    q_val = self.model_configs[model_name]["args"].get("qualities")
-                    if q_val:
-                        qs = q_val.get().split()
-                        if qs: q = qs[0]
-                
-                recon_dir = os.path.join(model_out, f"quality_{q}", "reconstructions")
-                if os.path.exists(recon_dir):
-                    for f in os.listdir(recon_dir):
-                        if f.startswith(base_name) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
-                            found = os.path.join(recon_dir, f)
-                            break
-            else:
-                # Look for any file in model_out that starts with our base_name
-              for f in os.listdir(model_out):
-                  if f.startswith(base_name) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
-                      found = os.path.join(model_out, f)
-                      break
-                  if f == selected_img:
-                      found = os.path.join(model_out, f)
-                      break
-        if found:
-            self.comp_canvas.set_images(gt_path, found)
-            self.log(f"[Viewer] Loaded: {os.path.basename(found)}\n")
-        else:
-            self.comp_canvas.set_images(gt_path, None) 
-            self.log(f"[Viewer] Warning: No recon found for {base_name} in {model_name}.\n")
+        model_left = self.model_selector_left.get()
+        model_right = self.model_selector_right.get()
 
-    def show_current_metrics_popup(self):
-        selected_img = self.img_selector.get()
-        model_name = self.model_selector.get()
-        if not selected_img or not model_name:
-            messagebox.showwarning("Warning", "Please select an image and model first.")
+        if not selected_img or not model_left or not model_right: 
             return
-        if model_name not in self.metrics_data:
-            messagebox.showinfo("Info", "No metrics available. Please run evaluation first.")
-            return
-        data = self.metrics_data[model_name]
-        img_metrics = None
-        for item in data.get("per_image_metrics", []):
-            if item.get("image_name") == selected_img or item.get("image_name").startswith(os.path.splitext(selected_img)[0]):
-                img_metrics = item
-                break
-        popup = tk.Toplevel(self.root)
-        popup.title(f"Metrics: {selected_img}")
-        popup.geometry("400x350")
-        frame = ttk.Frame(popup, padding=20)
-        frame.pack(fill=tk.BOTH, expand=True)
-        ttk.Label(frame, text=f"Image: {selected_img}", style='Header.TLabel').pack(pady=(0, 15))
-        avg = data.get("averages", {})
-        def add_metric(name, value, avg_val):
-            row = ttk.Frame(frame)
-            row.pack(fill=tk.X, pady=5)
-            ttk.Label(row, text=f"{name}:", font=self.F_BTN, width=10).pack(side=tk.LEFT)
-            ttk.Label(row, text=str(value), font=self.F_BTN, foreground="#d9534f").pack(side=tk.LEFT)
-            ttk.Label(row, text=f" (Avg: {avg_val})", font=self.F_BASE).pack(side=tk.LEFT)
-        if img_metrics:
-            add_metric("PSNR", img_metrics.get("psnr"), avg.get("psnr"))
-            add_metric("SSIM", img_metrics.get("ssim"), avg.get("ssim"))
-            add_metric("LPIPS", img_metrics.get("lpips"), avg.get("lpips"))
-            add_metric("BPP", img_metrics.get("bpp"), avg.get("bpp"))
-        ttk.Button(frame, text="Close", command=popup.destroy).pack(pady=15)
+
+        error_type = self.error_type_var.get()
+        use_overlay = self.ssim_overlay_var.get()
+        
+        show_error = (error_type != "None")
+        invert_overlay = (error_type == "SSIM")
+        
+        # Determine base paths and overlay paths
+        subfolder = "reconstruction"
+        if show_error:
+            if error_type == "PSNR": subfolder = "psnr_map"
+            elif error_type == "SSIM": subfolder = "ssim_map"
+
+        if show_error and use_overlay:
+            # Base is reconstruction, overlay is the error map
+            path_left = self.get_model_image_path(model_left, selected_img, "reconstruction")
+            path_right = self.get_model_image_path(model_right, selected_img, "reconstruction")
+            overlay_left = self.get_model_image_path(model_left, selected_img, subfolder) if model_left != "Ground Truth" else None
+            overlay_right = self.get_model_image_path(model_right, selected_img, subfolder) if model_right != "Ground Truth" else None
+        elif show_error:
+            # Base is the error map directly
+            path_left = self.get_model_image_path(model_left, selected_img, subfolder)
+            path_right = self.get_model_image_path(model_right, selected_img, subfolder)
+            overlay_left = overlay_right = None
+        else:
+            # Standard reconstruction view
+            path_left = self.get_model_image_path(model_left, selected_img, "reconstruction")
+            path_right = self.get_model_image_path(model_right, selected_img, "reconstruction")
+            overlay_left = overlay_right = None
+
+        show_m = self.show_metrics_var.get()
+        metrics_left = self.get_metrics_string(model_left, selected_img, path_left)
+        metrics_right = self.get_metrics_string(model_right, selected_img, path_right)
+
+        self.comp_canvas.set_images(
+            path_right, path_left, 
+            overlay_path1=overlay_right, overlay_path2=overlay_left,
+            label1=model_right, label2=model_left,
+            metrics1=metrics_right, metrics2=metrics_left,
+            show_metrics=show_m,
+            invert_overlay=invert_overlay
+        )
+
+        log_msg = f"[Viewer] Comparing: {model_left} vs {model_right} ({selected_img})"
+        if show_error: log_msg += f" [{error_type} Map]"
+        if show_error and use_overlay: log_msg += " [Overlay Mode]"
+        self.log(log_msg + "\n")
 
 if __name__ == "__main__":
     root = tk.Tk()

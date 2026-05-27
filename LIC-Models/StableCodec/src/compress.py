@@ -132,7 +132,7 @@ def main(args):
 
         output_pil.save(outf)
 
-    print('\n[Average BPP]', np.mean(bpp))
+    print('\n[Average bpp]', np.mean(bpp))
     
 
 if __name__ == "__main__":

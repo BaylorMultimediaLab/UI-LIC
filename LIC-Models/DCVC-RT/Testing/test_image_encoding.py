@@ -126,7 +126,7 @@ def process_image(img_path, net, lpips_fn, args):
 
     vmaf_val = calculate_vmaf(img_path, recon_img)
 
-    print(f"[{base_name}] BPP: {bpp:.4f} | PSNR: {psnr:.2f} | MS-SSIM: {msssim:.4f} | VMAF: {vmaf_val:.2f} | LPIPS: {lpips_val:.4f}")
+    print(f"[{base_name}] bpp: {bpp:.4f} | PSNR: {psnr:.2f} | MS-SSIM: {msssim:.4f} | VMAF: {vmaf_val:.2f} | LPIPS: {lpips_val:.4f}")
     
     # --- Save Decoded Image as normalized name (e.g., kodim01.png) ---
     out_path = os.path.join(args.rec_path, f"{base_name}.png")
@@ -193,7 +193,7 @@ def main():
     # 4. Print Averages
     count = len(image_paths)
     print(f"\n--- Average Results for {count} image(s) ---")
-    print(f"Avg BPP:     {t_bpp / count:.4f}")
+    print(f"Avg bpp:     {t_bpp / count:.4f}")
     print(f"Avg PSNR:    {t_psnr / count:.2f} dB")
     print(f"Avg MS-SSIM: {t_msssim / count:.4f}")
     print(f"Avg VMAF:    {t_vmaf / count:.2f}")

@@ -493,6 +493,69 @@ class LICApp:
                     elif qp_var.get() != first_qp_var.get():
                         qp_var.set(first_qp_var.get())
 
+    def _find_largest_weight(self, weights_dir):
+        if not os.path.isdir(weights_dir):
+            return None
+        candidates = []
+        for root, _, files in os.walk(weights_dir):
+            for fname in files:
+                if fname.endswith((".pth", ".pth.tar", ".pkl", ".pt")):
+                    candidates.append(os.path.join(root, fname))
+        if not candidates:
+            return None
+        return max(candidates, key=lambda p: os.path.getsize(p))
+
+    def _find_checkpoint_weight(self, workdir):
+        search_dirs = [
+            os.path.join(workdir, "checkpoints"),
+            os.path.join(ROOT_DIR, "checkpoints")
+        ]
+        found_files = []
+        for sd in search_dirs:
+            if os.path.exists(sd):
+                for ext in ["*.pth", "*.pth.tar", "*.pkl", "*.pt"]:
+                    for depth in range(4):
+                        wildcards = ["*"] * depth
+                        pattern = os.path.join(sd, *wildcards, ext)
+                        found_files.extend(glob.glob(pattern))
+        if not found_files:
+            return None
+        best_files = [f for f in found_files if 'best' in os.path.basename(f).lower()]
+        if best_files:
+            best_files.sort(key=os.path.getmtime, reverse=True)
+            return best_files[0]
+        found_files.sort(key=os.path.getmtime, reverse=True)
+        return found_files[0]
+
+    def _apply_weight_autofill(self, model_name, force=False):
+        config = self.model_configs.get(model_name)
+        if not config:
+            return
+        use_pretrained_var = config.get("use_pretrained")
+        if use_pretrained_var is None:
+            return
+
+        workdir = os.path.join(ROOT_DIR, config["workdir"].get())
+        weights_dir = os.path.join(workdir, "weights")
+        weight_path = self._find_largest_weight(weights_dir) if use_pretrained_var.get() else None
+        if weight_path is None:
+            weight_path = self._find_checkpoint_weight(workdir)
+
+        for arg_name, var in config["args"].items():
+            arg_lower = arg_name.lower()
+            is_weight_arg = any(k in arg_lower for k in ["checkpoint", "model_path", "codec_path", "weights", "weight"])
+            if not is_weight_arg:
+                continue
+            if any(k in arg_lower for k in ["sd_path", "elic_path"]):
+                continue
+            if not force and var.get() not in ("", None, "None"):
+                continue
+            if weight_path:
+                var.set(weight_path)
+
+    def on_use_pretrained_toggle(self, model_name):
+        self._apply_weight_autofill(model_name, force=True)
+
     def toggle_error_options(self, event=None):
         if self.error_type_var.get() != "None":
             self.ssim_overlay_check.pack(side=tk.LEFT, padx=15)
@@ -671,7 +734,8 @@ class LICApp:
             self.model_configs[model_name] = {
                 "args": {},
                 "workdir": tk.StringVar(value=workdir_val),
-                "env": tk.StringVar()
+                "env": tk.StringVar(),
+                "use_pretrained": tk.BooleanVar(value=True) if model_name not in standard_codecs else None
             }
 
             defaults = getattr(interface_cls, 'DEFAULT_VARS', {})
@@ -712,6 +776,14 @@ class LICApp:
             create_row("Env Path:", config["env"], is_dir=True)
             ttk.Separator(frame, orient='horizontal').pack(fill=tk.X, pady=10)
 
+        if model_name not in standard_codecs:
+            ttk.Checkbutton(
+                frame,
+                text="Use Pretrained Weights",
+                variable=config["use_pretrained"],
+                command=lambda m=model_name: self.on_use_pretrained_toggle(m)
+            ).pack(anchor="w", pady=(0, 5))
+
         for arg_name, var in config["args"].items():
             # Filter what to show in non-advanced mode
             if not show_advanced:
@@ -741,31 +813,32 @@ class LICApp:
             
             # Autofill for checkpoints/models if empty
             if is_file and (not var.get() or var.get() == "None"):
-                workdir = os.path.join(ROOT_DIR, config["workdir"].get())
-                # Try common locations
-                search_dirs = [
-                    workdir,
-                    os.path.join(workdir, "checkpoints"),
-                    os.path.join(ROOT_DIR, "checkpoints")
-                ]
-                found_files = []
-                for sd in search_dirs:
-                    if os.path.exists(sd):
-                        for ext in ["*.pth", "*.pth.tar", "*.pkl", "*.pt"]:
-                            for depth in range(4):
-                                wildcards = ["*"] * depth
-                                pattern = os.path.join(sd, *wildcards, ext)
-                                found_files.extend(glob.glob(pattern))
-                
-                if found_files:
-                    # Priority: 1. Contains 'best', 2. Newest modified
-                    best_files = [f for f in found_files if 'best' in os.path.basename(f).lower()]
-                    if best_files:
-                        best_files.sort(key=os.path.getmtime, reverse=True)
-                        var.set(best_files[0])
-                    else:
-                        found_files.sort(key=os.path.getmtime, reverse=True)
-                        var.set(found_files[0])
+                if model_name not in standard_codecs:
+                    self._apply_weight_autofill(model_name)
+                else:
+                    workdir = os.path.join(ROOT_DIR, config["workdir"].get())
+                    search_dirs = [
+                        workdir,
+                        os.path.join(workdir, "checkpoints"),
+                        os.path.join(ROOT_DIR, "checkpoints")
+                    ]
+                    found_files = []
+                    for sd in search_dirs:
+                        if os.path.exists(sd):
+                            for ext in ["*.pth", "*.pth.tar", "*.pkl", "*.pt"]:
+                                for depth in range(4):
+                                    wildcards = ["*"] * depth
+                                    pattern = os.path.join(sd, *wildcards, ext)
+                                    found_files.extend(glob.glob(pattern))
+                    
+                    if found_files:
+                        best_files = [f for f in found_files if 'best' in os.path.basename(f).lower()]
+                        if best_files:
+                            best_files.sort(key=os.path.getmtime, reverse=True)
+                            var.set(best_files[0])
+                        else:
+                            found_files.sort(key=os.path.getmtime, reverse=True)
+                            var.set(found_files[0])
 
             create_row(f"{arg_name}:", var, is_dir=is_dir, is_file=is_file, required=is_required)
 

@@ -276,6 +276,7 @@ class Dispatcher:
                     task_name = job.get("task_name")
                     save_dir = job.get("save_dir")
                     input_dir = job.get("input_dir")
+                    use_vmaf = job.get("use_vmaf", eval_data.get("use_vmaf", False))
 
                     if not all([task_name, save_dir, input_dir]):
                         print(f" -> [SKIP] Evaluation task missing required fields: {job}")
@@ -289,6 +290,9 @@ class Dispatcher:
                         "--save_dir", str(save_dir),
                         "--input_dir", str(input_dir)
                     ]
+                    
+                    if use_vmaf:
+                        cmd.append("--use_vmaf")
                     
                     try:
                         subprocess.run(cmd, check=True)

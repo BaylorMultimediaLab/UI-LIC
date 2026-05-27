@@ -10,6 +10,13 @@ from piq import psnr
 from skimage.metrics import structural_similarity as ssim
 import lpips
 
+# Import Docker VMAF helper
+try:
+    from vmaf_docker import calculate_vmaf, check_docker_availability
+except ImportError:
+    calculate_vmaf = None
+    check_docker_availability = None
+
 def get_bpp(bitstream_path, width, height):
     if not os.path.exists(bitstream_path):
         return 0.0
@@ -30,7 +37,22 @@ def main():
     parser.add_argument("--task_name", type=str, required=True)
     parser.add_argument("--save_dir", type=str, required=True)
     parser.add_argument("--input_dir", type=str, required=True)
+    parser.add_argument("--use_vmaf", action="store_true", help="Enable VMAF evaluation via Docker")
     args = parser.parse_args()
+
+    # Safely handle VMAF dependency
+    if args.use_vmaf:
+        if calculate_vmaf is None or check_docker_availability is None:
+            print("Warning: vmaf_docker.py not found. VMAF evaluation disabled.")
+            args.use_vmaf = False
+        else:
+            is_available, msg = check_docker_availability()
+            if not is_available:
+                print(f"Warning: {msg}")
+                print("VMAF evaluation will be skipped to prevent crashes.")
+                args.use_vmaf = False
+            else:
+                print("VMAF check passed. Docker is ready.")
 
     # 2. Define Device FIRST
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -81,6 +103,8 @@ def main():
     recon_files = sorted([f for f in os.listdir(recon_dir) if f.lower().endswith(valid_extensions)])
     
     metrics = {"psnr": [], "psnr_y": [], "psnr_u": [], "psnr_v": [], "ssim": [], "lpips": [], "bpp": []}
+    if args.use_vmaf:
+        metrics["vmaf"] = []
     per_image_results = []
 
     qp_map = {}
@@ -93,6 +117,8 @@ def main():
             qp_map = {}
 
     print(f"Evaluating {len(recon_files)} images for {args.task_name} on {device}...")
+    if args.use_vmaf:
+        print("VMAF evaluation is ENABLED (using Docker). This may be slower.")
 
     # 5. Evaluation Loop
     to_tensor = transforms.ToTensor()
@@ -111,6 +137,9 @@ def main():
         if not gt_path:
             continue
 
+
+        recon_path = os.path.join(recon_dir, r_file)
+       
         gt_img = Image.open(gt_path).convert("RGB")
         rec_img = Image.open(os.path.join(recon_dir, r_file)).convert("RGB")
 
@@ -178,6 +207,12 @@ def main():
                 
         bpp_val = get_bpp(bits_file, w, h) if bits_file else 0.0
 
+        # Calculate VMAF if requested
+        vmaf_val = 0.0
+        if args.use_vmaf:
+            vmaf_val = calculate_vmaf(recon_path, gt_path)
+            metrics["vmaf"].append(vmaf_val)
+
         # Append to raw data pools for rolling average calculation
         metrics["psnr"].append(psnr_val)
         metrics["psnr_y"].append(psnr_y)
@@ -188,7 +223,7 @@ def main():
         metrics["bpp"].append(bpp_val)
 
         # Save granular data for individual tracking profile
-        per_image_results.append({
+        res_entry = {
             "image_name": r_file,
             "psnr": round(psnr_val, 4),
             "psnr_y": round(psnr_y, 4),
@@ -198,7 +233,12 @@ def main():
             "lpips": round(lpips_val, 4),
             "bpp": round(bpp_val, 4),
             "qp": qp_map.get(base_no_ext)
-        })
+        }
+        if args.use_vmaf:
+            res_entry["vmaf"] = round(vmaf_val, 4)
+            
+        per_image_results.append(res_entry)
+
 
     # 6. Compute Averages and Print results
     averages = {}

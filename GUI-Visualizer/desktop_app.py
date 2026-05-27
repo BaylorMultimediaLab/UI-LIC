@@ -291,9 +291,11 @@ class LICApp:
         self.model_configs = {}
         self.log_queue = queue.Queue()
         self.selected_model_names = []
+        self.external_folders = {} # {display_name: folder_path}
         self.metrics_data = {} # {model_name: {averages: {}, per_image: []}}
         self.lpips_layer_vars = [tk.BooleanVar(value=True) for _ in range(5)]
         
+        self.load_external_folders()
         self.setup_ui()
         self.load_metrics() # Added to load existing results on startup
         self.setup_bindings()
@@ -443,6 +445,27 @@ class LICApp:
             self.model_listbox.insert(tk.END, name)
         self.model_listbox.pack(fill=tk.X, pady=(0, 15))
         self.model_listbox.bind("<<ListboxSelect>>", self.on_model_select)
+
+        # External Folders Section
+        ttk.Label(self.sidebar, text="3. External Reconstructions", style='Header.TLabel').pack(anchor="w", pady=(10, 5))
+        ext_btn_f = ttk.Frame(self.sidebar)
+        ext_btn_f.pack(fill=tk.X, pady=(0, 5))
+        ttk.Button(ext_btn_f, text="+ Add Folder", command=self.add_external_folder).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
+        ttk.Button(ext_btn_f, text="- Remove", command=self.remove_external_folder).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(2, 0))
+
+        self.external_listbox = tk.Listbox(
+            self.sidebar,
+            selectmode=tk.MULTIPLE,
+            height=4,
+            exportselection=False,
+            font=self.F_BASE,
+            bg="#2b2b2b",
+            fg="#ffffff",
+            selectbackground="#007acc"
+        )
+        self.external_listbox.pack(fill=tk.X, pady=(0, 10))
+        self.refresh_external_listbox()
+        self.external_listbox.bind("<<ListboxSelect>>", self.on_model_select)
 
         self.run_btn = ttk.Button(self.sidebar, text="RUN EVALUATION", style='Run.TButton', command=self.run_evaluation)
         self.run_btn.pack(fill=tk.X, pady=15)
@@ -775,6 +798,57 @@ class LICApp:
     def log(self, msg):
         self.log_queue.put(msg)
 
+    def add_external_folder(self):
+        path = filedialog.askdirectory(title="Select folder with reconstructed images")
+        if path:
+            path = os.path.abspath(os.path.expanduser(path))
+            name = os.path.basename(path)
+            if not name: name = "External_Folder"
+
+            # Ensure unique name
+            base_name = name
+            counter = 1
+            while name in self.external_folders or name in self.registry:
+                name = f"{base_name}_{counter}"
+                counter += 1
+
+            self.external_folders[name] = path
+            self.save_external_folders()
+            self.refresh_external_listbox()
+            self.log(f"[GUI] Added external folder: {name} -> {path}\n")
+
+    def remove_external_folder(self):
+        selected = self.external_listbox.curselection()
+        if not selected: return
+        name = self.external_listbox.get(selected[0])
+        if name in self.external_folders:
+            del self.external_folders[name]
+            self.save_external_folders()
+            self.refresh_external_listbox()
+            self.on_model_select()
+
+    def refresh_external_listbox(self):
+        self.external_listbox.delete(0, tk.END)
+        for name in sorted(self.external_folders.keys()):
+            self.external_listbox.insert(tk.END, name)
+
+    def save_external_folders(self):
+        save_path = os.path.join(ROOT_DIR, ".gemini_external_folders.json")
+        try:
+            with open(save_path, 'w') as f:
+                json.dump(self.external_folders, f, indent=4)
+        except Exception as e:
+            print(f"Failed to save external folders: {e}")
+
+    def load_external_folders(self):
+        save_path = os.path.join(ROOT_DIR, ".gemini_external_folders.json")
+        if os.path.exists(save_path):
+            try:
+                with open(save_path, 'r') as f:
+                    self.external_folders = json.load(f)
+            except Exception as e:
+                print(f"Failed to load external folders: {e}")
+
     def on_model_select(self, event=None):
         for widget in self.config_scrollable_frame.winfo_children():
             widget.destroy()
@@ -782,19 +856,24 @@ class LICApp:
         selected_indices = self.model_listbox.curselection()
         self.selected_model_names = [self.model_listbox.get(i) for i in selected_indices]
 
-        # Populate both comparison selectors with GT + selected models
-        comp_values = ["Ground Truth"] + self.selected_model_names
+        selected_ext_indices = self.external_listbox.curselection()
+        self.selected_external_names = [self.external_listbox.get(i) for i in selected_ext_indices]
+
+        # Populate both comparison selectors with GT + selected models + external
+        comp_values = ["Ground Truth"] + self.selected_model_names + self.selected_external_names
         self.model_selector_left['values'] = comp_values
         self.model_selector_right['values'] = comp_values
-        
+
         # Set defaults: Left=GT, Right=First Model (if available)
         self.model_selector_left.set("Ground Truth")
         if self.selected_model_names:
             self.model_selector_right.set(self.selected_model_names[0])
+        elif self.selected_external_names:
+            self.model_selector_right.set(self.selected_external_names[0])
         else:
             self.model_selector_right.set("Ground Truth")
 
-        self.metrics_model_sel['values'] = self.selected_model_names
+        self.metrics_model_sel['values'] = self.selected_model_names + self.selected_external_names
 
         # Toggle equalize visibility
         standard_codecs = ["AVC", "HEVC", "AV1"]
@@ -807,9 +886,18 @@ class LICApp:
         for name in self.selected_model_names:
             self.build_model_config_ui(name)
 
+        for name in self.selected_external_names:
+            self.build_external_config_ui(name)
+
         self.sync_standard_qps()
-        
         self.update_comparison()
+
+    def build_external_config_ui(self, name):
+        frame = ttk.LabelFrame(self.config_scrollable_frame, text=f"External: {name}", padding=15)
+        frame.pack(fill=tk.X, pady=10, padx=5)
+        path = self.external_folders.get(name, "Unknown Path")
+        ttk.Label(frame, text=f"Source Path: {path}", font=self.F_BASE, wraplength=350).pack(anchor="w")
+        ttk.Label(frame, text="Note: Images will be copied to outputs and evaluated.", font=self.F_BASE, foreground="gray").pack(anchor="w", pady=(5,0))
 
     def build_model_config_ui(self, model_name):
         frame = ttk.LabelFrame(self.config_scrollable_frame, text=f"Config: {model_name}", padding=15)
@@ -940,8 +1028,8 @@ class LICApp:
             create_row(f"{arg_name}:", var, is_dir=is_dir, is_file=is_file, required=is_required)
 
     def run_evaluation(self):
-        if not self.selected_model_names:
-            messagebox.showerror("Error", "Please select at least one model from the Models list.")
+        if not self.selected_model_names and not getattr(self, 'selected_external_names', []):
+            messagebox.showerror("Error", "Please select at least one model or external folder.")
             return
         gt_dir = os.path.expanduser(self.gt_dir_var.get().strip())
         if not gt_dir or not os.path.isdir(gt_dir):
@@ -978,6 +1066,9 @@ class LICApp:
         eval_tasks = []
         standard_equalize_config = None
         standard_use_gpu = None
+        model_timings = {}
+
+        # Prepare evaluation tasks for normal models
         for model_name in self.selected_model_names:
             config = self.model_configs[model_name]
             final_args = {}
@@ -993,42 +1084,27 @@ class LICApp:
             model_out = os.path.abspath(os.path.join(output_base, model_name))
             os.makedirs(model_out, exist_ok=True)
 
-#             if model_name == "LIC-HPCM": final_args["save_dir"] = model_out
-#             elif model_name == "StableCodec":
-#                 final_args["rec_path"] = model_out
-#                 final_args["bin_path"] = os.path.join(model_out, "bins")
-#             elif model_name == "DCVC-RT": final_args["save_dir"] = model_out
-#             elif model_name == "ELIC": final_args["experiment"] = f"gui_eval_{model_name}"
             if model_name == "RwkvCompress": 
                 final_args["save_dir"] = model_out
-                # Ensure only ONE quality is used in GUI mode for compatibility
                 if "qualities" in final_args:
                     qs = final_args["qualities"]
-                    if isinstance(qs, str):
-                        qs = qs.split()
+                    if isinstance(qs, str): qs = qs.split()
                     if isinstance(qs, list) and len(qs) > 1:
                         self.log(f"[GUI] Warning: RwkvCompress supports multiple qualities, but GUI only visualizes one. Using first quality: {qs[0]}\n")
                         final_args["qualities"] = [qs[0]]
                     if "checkpoints" in final_args:
                         ckpts = final_args["checkpoints"]
-                        if isinstance(ckpts, str):
-                            ckpts = ckpts.split()
+                        if isinstance(ckpts, str): ckpts = ckpts.split()
                         if isinstance(ckpts, list) and len(ckpts) > 1:
                             final_args["checkpoints"] = [ckpts[0]]
             else:
               final_args["save_dir"] = model_out
 
-            # Derive or use custom model environment path
             user_model_env = config["env"].get().strip()
             if user_model_env:
                 model_env = os.path.abspath(os.path.expanduser(user_model_env))
             else:
                 model_env = find_env(f"{model_name}-env")
-
-            if not model_env or not os.path.exists(model_env):
-                self.log(f"[WARNING] Environment for {model_name} not found. Looked in common project locations.\n")
-                if not self.show_advanced_var.get():
-                     self.log("[HINT] Switch to 'Advanced Mode' to manually set the environment path if it is in a non-standard location.\n")
 
             tasks[model_name] = {
                 "task_name": model_name,
@@ -1054,9 +1130,29 @@ class LICApp:
                         "env_path": model_env if model_env and os.path.exists(model_env) else None
                     }
                     standard_use_gpu = final_args.get("use_gpu")
-                else:
-                    if standard_use_gpu != final_args.get("use_gpu"):
-                        self.log("[GUI] Warning: Equalize enabled, but standard codecs have different 'use_gpu' values. Using the first codec's setting.\n")
+
+        # Prepare tasks for external folders
+        import shutil
+        for name in getattr(self, 'selected_external_names', []):
+            src_path = self.external_folders[name]
+            model_out = os.path.join(output_base, name)
+            recon_dir = os.path.join(model_out, "reconstruction")
+            os.makedirs(recon_dir, exist_ok=True)
+            
+            self.log(f"[GUI] External Folder: Copying images from {src_path} to {recon_dir}...\n")
+            count = 0
+            for f in os.listdir(src_path):
+                if f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    shutil.copy2(os.path.join(src_path, f), os.path.join(recon_dir, f))
+                    count += 1
+            self.log(f"[GUI] Copied {count} images for {name}.\n")
+            
+            eval_tasks.append({
+                "task_name": name,
+                "save_dir": model_out,
+                "input_dir": gt_dir
+            })
+            model_timings[name] = 0.0
 
         # Derive eval environment path
         eval_env_path = find_env("eval-env")
@@ -1064,9 +1160,6 @@ class LICApp:
              self.log(f"[WARNING] Evaluation environment 'eval-env' not found.\n")
              if not self.show_advanced_var.get():
                 self.log("[HINT] Evaluation requires 'evaluation.py' to run in a specific environment. Ensure it was created via quick-start.py or set it in Advanced Mode.\n")
-
-        # Track total run time per model
-        model_timings = {}
 
         original_print = builtins.print
         def custom_print(*args, **kwargs):
@@ -1272,6 +1365,27 @@ class LICApp:
                 
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
+
+            # Run evaluation for external folders
+            for name in getattr(self, 'selected_external_names', []):
+                self.log(f"\n[GUI] Starting Evaluation for External: {name}...\n")
+                this_eval_env = eval_env_path if os.path.exists(eval_env_path) else "n/a"
+                python_exec = sys.executable
+                if this_eval_env != "n/a":
+                    if os.path.isdir(os.path.join(this_eval_env, "Scripts")):
+                        python_exec = os.path.join(this_eval_env, "Scripts", "python.exe")
+                    else:
+                        python_exec = os.path.join(this_eval_env, "bin", "python3")
+                
+                eval_job = next(j for j in eval_tasks if j["task_name"] == name)
+                cmd = [
+                    python_exec, os.path.join(ROOT_DIR, "evaluation.py"),
+                    "--task_name", name,
+                    "--save_dir", eval_job["save_dir"],
+                    "--input_dir", eval_job["input_dir"],
+                    "--use_vmaf"
+                ]
+                subprocess.run(cmd)
 
             self.log("\n[GUI] All tasks completed successfully.\n")
 

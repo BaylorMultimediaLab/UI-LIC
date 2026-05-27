@@ -121,9 +121,15 @@ def test(args):
     for ckpt in args.checkpoint:
         print("Loading", ckpt)
         checkpoint = torch.load(ckpt, map_location=device)
+        state_dict = checkpoint.get("state_dict", checkpoint) if isinstance(checkpoint, dict) else checkpoint
         model = net()
         model.eval()
-        model.load_state_dict(checkpoint, strict=True)
+        try:
+            model.load_state_dict(state_dict, strict=True)
+        except RuntimeError as e:
+            print(f"[WARNING] Strict load failed: {e}")
+            print("[WARNING] Retrying with strict=False to allow missing keys.")
+            model.load_state_dict(state_dict, strict=False)
         model.update(get_scale_table(0.12, 64, args.num))
         model = model.to(device)
 

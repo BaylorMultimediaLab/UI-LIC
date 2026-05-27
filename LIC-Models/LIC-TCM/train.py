@@ -217,11 +217,20 @@ def test_epoch(epoch, test_dataloader, model, criterion, type='mse'):
 
 
 def save_checkpoint(state, is_best, epoch, save_path, filename):
-    torch.save(state, save_path + "checkpoint_latest.pth.tar")
-    if epoch % 5 == 0:
-        torch.save(state, filename)
+    latest_path = os.path.join(save_path, "checkpoint_latest.pth.tar")
+    best_path = os.path.join(save_path, "checkpoint_best.pth.tar")
+    torch.save(state, latest_path)
     if is_best:
-        torch.save(state, save_path + "checkpoint_best.pth.tar")
+        torch.save(state, best_path)
+    for fname in os.listdir(save_path):
+        if not fname.startswith("checkpoint_"):
+            continue
+        fpath = os.path.join(save_path, fname)
+        if fpath not in [latest_path, best_path]:
+            try:
+                os.remove(fpath)
+            except OSError:
+                pass
 
 
 def parse_args(argv):

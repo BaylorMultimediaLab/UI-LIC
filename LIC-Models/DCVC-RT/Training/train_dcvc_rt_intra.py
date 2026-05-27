@@ -141,9 +141,9 @@ def _sample_qp(args: argparse.Namespace, device: torch.device) -> int:
     return int(torch.randint(0, 64, (1,), device=device).item())
 
 
-def _save_weights_only(out_dir: Path, step: int, dmci) -> Path:
+def _save_weights_only(out_dir: Path, name: str, dmci) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"dmci_intra_step{step:07d}.pth"
+    path = out_dir / name
     # Must be compatible with `torch.load(..., weights_only=True)` used by `src/utils/common.get_state_dict()`.
     #
     # Why weights-only:
@@ -152,6 +152,16 @@ def _save_weights_only(out_dir: Path, step: int, dmci) -> Path:
     # - If you want resumable training (optimizer state), you can extend this later.
     torch.save({"state_dict": dmci.state_dict()}, path)
     return path
+
+
+def _cleanup_checkpoints(out_dir: Path, keep_paths: list[Path]) -> None:
+    for path in out_dir.glob("dmci_intra_*.pth"):
+        if path in keep_paths:
+            continue
+        try:
+            path.unlink()
+        except OSError:
+            pass
 
 
 def main() -> None:
@@ -243,6 +253,8 @@ def main() -> None:
     
     step = 0
     model.train()
+    best_val_loss = float("inf")
+    best_path: Optional[Path] = None
 
     # We now loop over epochs instead of a fixed number of steps.
     for epoch in range(int(args.epochs)):
@@ -276,7 +288,11 @@ def main() -> None:
                 )
 
             if step % int(args.save_every) == 0:
-                _save_weights_only(out_dir, step, dmci)
+                latest_path = _save_weights_only(out_dir, "dmci_intra_latest.pth", dmci)
+                keep_paths = [latest_path]
+                if best_path is not None:
+                    keep_paths.append(best_path)
+                _cleanup_checkpoints(out_dir, keep_paths)
 
             if val_loader is not None and step % int(args.val_every) == 0:
                 val_qp = int(args.qp) if int(args.qp) >= 0 else 32
@@ -290,10 +306,24 @@ def main() -> None:
                 with (out_dir / "val_log.jsonl").open("a", encoding="utf-8") as f:
                     f.write(__import__("json").dumps({"step": step, "epoch": epoch+1, **stats}) + "\n")
                 
+                val_loss = stats.get("val_loss")
+                if isinstance(val_loss, (int, float)) and val_loss < best_val_loss:
+                    best_val_loss = float(val_loss)
+                    best_path = _save_weights_only(out_dir, "dmci_intra_best.pth", dmci)
+                    keep_paths = [best_path]
+                    latest_candidate = out_dir / "dmci_intra_latest.pth"
+                    if latest_candidate.exists():
+                        keep_paths.append(latest_candidate)
+                    _cleanup_checkpoints(out_dir, keep_paths)
+
                 model.train() # Return to training mode after validation
 
     # Final checkpoint at the very end of training.
-    _save_weights_only(out_dir, step, dmci)
+    latest_path = _save_weights_only(out_dir, "dmci_intra_latest.pth", dmci)
+    keep_paths = [latest_path]
+    if best_path is not None:
+        keep_paths.append(best_path)
+    _cleanup_checkpoints(out_dir, keep_paths)
     pbar.close()
 
 

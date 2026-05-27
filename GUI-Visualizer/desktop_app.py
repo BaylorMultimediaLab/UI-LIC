@@ -373,6 +373,7 @@ class LICApp:
 
         self.main_area = ttk.Notebook(self.paned)
         self.paned.add(self.main_area, weight=4)
+        self.main_area.bind("<<NotebookTabChanged>>", self.on_main_tab_changed)
 
         self.config_tab = ttk.Frame(self.main_area, padding=20)
         self.main_area.add(self.config_tab, text="Configuration")
@@ -452,6 +453,16 @@ class LICApp:
         self.log_area.pack(fill=tk.BOTH, expand=True, pady=(20, 0))
         self.log_area.bind("<Key>", self.block_input)
 
+    def on_main_tab_changed(self, event=None):
+        current_tab = self.main_area.tab(self.main_area.select(), "text")
+        if current_tab == "Visual Comparison":
+            self.load_metrics()
+            self.refresh_image_list()
+            self.update_comparison()
+        elif current_tab == "Metrics Report":
+            self.load_metrics()
+            self.refresh_metrics_display()
+
     def on_equalize_toggle(self):
         self.on_model_select() # Refresh UI to show/hide synchronized QPs
 
@@ -526,7 +537,7 @@ class LICApp:
         table_frame = ttk.Frame(self.model_details_tab)
         table_frame.pack(fill=tk.BOTH, expand=True)
 
-        columns = ("image", "psnr", "ssim", "lpips", "bpp")
+        columns = ("image", "psnr", "ssim", "lpips", "bpp", "vmaf")
         self.metrics_tree = ttk.Treeview(table_frame, columns=columns, show="headings")
 
         for col in columns:
@@ -546,10 +557,10 @@ class LICApp:
         summary_table_frame = ttk.Frame(self.overall_summary_tab)
         summary_table_frame.pack(fill=tk.BOTH, expand=True)
 
-        sum_cols = ("model", "avg_psnr", "avg_bpp", "best_img", "best_psnr", "worst_img", "worst_psnr", "time")
+        sum_cols = ("model", "avg_psnr", "avg_bpp", "avg_vmaf", "best_img", "best_psnr", "worst_img", "worst_psnr", "time")
         self.summary_tree = ttk.Treeview(summary_table_frame, columns=sum_cols, show="headings")
         
-        sum_col_widths = {"model": 120, "avg_psnr": 100, "avg_bpp": 80, "best_img": 150, "best_psnr": 100, "worst_img": 150, "worst_psnr": 100, "time": 100}
+        sum_col_widths = {"model": 120, "avg_psnr": 100, "avg_bpp": 80, "avg_vmaf": 90, "best_img": 150, "best_psnr": 100, "worst_img": 150, "worst_psnr": 100, "time": 100}
         for col in sum_cols:
             self.summary_tree.heading(col, text=col.replace("_", " ").upper())
             self.summary_tree.column(col, anchor="center", width=sum_col_widths.get(col, 100))
@@ -1023,7 +1034,8 @@ class LICApp:
                         python_exec, os.path.join(ROOT_DIR, "evaluation.py"),
                         "--task_name", model_name,
                         "--save_dir", eval_job["save_dir"],
-                        "--input_dir", eval_job["input_dir"]
+                        "--input_dir", eval_job["input_dir"],
+                        "--use_vmaf"
                     ]
                     subprocess.run(cmd)
 
@@ -1071,7 +1083,8 @@ class LICApp:
                     python_exec, os.path.join(ROOT_DIR, "evaluation.py"),
                     "--task_name", model_name,
                     "--save_dir", eval_job["save_dir"],
-                    "--input_dir", eval_job["input_dir"]
+                    "--input_dir", eval_job["input_dir"],
+                    "--use_vmaf"
                 ]
                 subprocess.run(cmd)
                 
@@ -1156,6 +1169,7 @@ class LICApp:
                 model_name,
                 avg.get("psnr"),
                 avg.get("bpp"),
+                avg.get("vmaf"),
                 best.get("image_name"),
                 best.get("psnr"),
                 worst.get("image_name"),
@@ -1171,7 +1185,11 @@ class LICApp:
         avg = data.get("averages", {})
         runtime = data.get("runtime_seconds", "N/A")
         time_str = f"{runtime:.2f}s" if isinstance(runtime, (int, float)) else "N/A"
-        summary_text = f"PSNR: {avg.get('psnr', 'N/A')} dB | SSIM: {avg.get('ssim', 'N/A')} | LPIPS: {avg.get('lpips', 'N/A')} | bpp: {avg.get('bpp', 'N/A')} | Time: {time_str}"
+        summary_text = (
+            f"PSNR: {avg.get('psnr', 'N/A')} dB | SSIM: {avg.get('ssim', 'N/A')} | "
+            f"LPIPS: {avg.get('lpips', 'N/A')} | bpp: {avg.get('bpp', 'N/A')} | "
+            f"VMAF: {avg.get('vmaf', 'N/A')} | Time: {time_str}"
+        )
         self.summary_label.config(text=summary_text)
         
         for item in self.metrics_tree.get_children():
@@ -1182,7 +1200,8 @@ class LICApp:
                 item.get("psnr"),
                 item.get("ssim"),
                 item.get("lpips"),
-                item.get("bpp")
+                item.get("bpp"),
+                item.get("vmaf")
             ))
         
         self.refresh_summary_report()
@@ -1259,7 +1278,11 @@ class LICApp:
                     qp = item.get("qp", None)
                     
                     line1 = f"PSNR: {psnr} | Y: {py} | U: {pu} | V: {pv}"
-                    line2 = f"SSIM: {ssim} | bpp: {bpp}"
+                    vmaf = item.get("vmaf", None)
+                    line2 = f"bpp: {bpp}"
+                    if vmaf not in (None, "", "N/A"):
+                        line2 = f"VMAF: {vmaf} | {line2}"
+                    line2 = f"SSIM: {ssim} | {line2}"
                     if qp not in (None, "", "N/A"):
                         line2 += f" | qp: {qp}"
                     return f"{line1}\n{line2}"

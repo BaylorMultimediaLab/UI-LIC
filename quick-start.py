@@ -25,7 +25,7 @@ ENV_DOWNLOAD_LINKS = {
 
 WEIGHTS_DATA = {
     "StableCodec": {
-        "base_path": "LIC-Models/StableCodec/",
+        "base_path": "LIC-Models/StableCodec/weights/",
         "description": "Finetuned for extreme low bitrates (0.005 - 0.035 bpp). Higher 'ft' number = lower bitrate / higher compression.",
         "options": [
             {"name": "stablecodec_base.pkl", "id": "1M8HUsL27sscgFb-DsJDr9QPmW4dC2a-4", "desc": "Base model for finetuning"},
@@ -41,7 +41,7 @@ WEIGHTS_DATA = {
         ]
     },
     "ELIC": {
-        "base_path": "LIC-Models/StableCodec/",
+        "base_path": "LIC-Models/ELIC/weights/",
         "description": "Auxiliary ELIC pretrained model used by StableCodec.",
         "options": [
             {"name": "elic_official.pth", "id": "1jUfYJdZd0-bYUsoOUWwEpI5t1MZYP3AP", "dest_name": "elic.pth", "desc": "Official ELIC auxiliary model"},

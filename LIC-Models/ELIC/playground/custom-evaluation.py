@@ -67,7 +67,8 @@ def main():
     
     logger_test.info(f"Loading checkpoint: {args.checkpoint}")
     checkpoint = torch.load(args.checkpoint, map_location=device)
-    net.load_state_dict(checkpoint['state_dict'])
+    state_dict = checkpoint.get('state_dict', checkpoint) if isinstance(checkpoint, dict) else checkpoint
+    net.load_state_dict(state_dict)
     net.update(force=True)
     net.eval()
     

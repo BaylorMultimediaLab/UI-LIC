@@ -365,12 +365,22 @@ def main(argv):
         is_best = loss < best_loss
         best_loss = min(loss, best_loss)
 
+        latest_path = os.path.join(args.save_path, "checkpoint_latest.pth.tar")
+        best_path = os.path.join(args.save_path, "checkpoint_best.pth.tar")
+        torch.save(net.state_dict(), latest_path)
         if is_best:
             print(f"epoch {epoch} is best now!")
-            torch.save(net.state_dict(), os.path.join(args.save_path, 'epoch_' +'best' + '.pth.tar'))
+            torch.save(net.state_dict(), best_path)
 
-        if epoch % 1000 == 0:
-            torch.save(net.state_dict(), os.path.join(args.save_path, 'epoch_' + str(epoch) + '.pth.tar'))
+        for fname in os.listdir(args.save_path):
+            if not fname.startswith("checkpoint_"):
+                continue
+            fpath = os.path.join(args.save_path, fname)
+            if fpath not in [latest_path, best_path]:
+                try:
+                    os.remove(fpath)
+                except OSError:
+                    pass
 
 
 if __name__ == "__main__":

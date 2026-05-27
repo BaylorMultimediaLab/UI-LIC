@@ -3,6 +3,7 @@ import sys
 import argparse
 import importlib.util
 import subprocess
+import webbrowser
 
 # Dynamically import create-env.py because of the dash in filename
 def load_create_env():
@@ -37,6 +38,12 @@ WEIGHTS_DATA = {
             {"name": "stablecodec_ft16.pkl", "id": "1Yu2F-9BKd9gDq6c9J7cBsC4_gy2bIHg_", "desc": "~0.010 bpp"},
             {"name": "stablecodec_ft24.pkl", "id": "1grLxmLuth4ydXhghZwa9wxGhjnRGzXim", "desc": "~0.008 bpp"},
             {"name": "stablecodec_ft32.pkl", "id": "1quyX_-g4B05DQrMb5bGlonaFrOlLyd8i", "desc": "~0.005 bpp (Highest compression)"},
+        ]
+    },
+    "ELIC": {
+        "base_path": "LIC-Models/StableCodec/",
+        "description": "Auxiliary ELIC pretrained model used by StableCodec.",
+        "options": [
             {"name": "elic_official.pth", "id": "1jUfYJdZd0-bYUsoOUWwEpI5t1MZYP3AP", "dest_name": "elic.pth", "desc": "Official ELIC auxiliary model"},
         ]
     },
@@ -103,7 +110,7 @@ WEIGHTS_DATA = {
         "base_path": "LIC-Models/DCVC-RT/weights/",
         "description": "Deep Context Video Compression (Real-Time).",
         "options": [
-            {"name": "dcvc_rt_weights.zip", "url": "https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%21s9f28b4cbda88424c8c43f9eb9011c7f6&authkey=!AHR0cHM6Ly8xZHJ2Lm1zL2YvYy8yODY2NTkyZDVjNTVkZjhjL0VzdTBLSi1JMmt4Q2pFUDU2NUFSeF9ZQjg4aTBVblI2WG5PRHFGY3ZaczRMY0A", "desc": "Full weight package"},
+            {"name": "dcvc_rt_weights.pth", "url": f"https://onedrive.live.com/?redeem=aHR0cHM6Ly8xZHJ2Lm1zL2YvYy8yODY2NTkyZDVjNTVkZjhjL0VzdTBLSi1JMmt4Q2pFUDU2NUFSeF9ZQjg4aTBVblI2WG5PRHFGY3ZaczRMY0E%5FZT1ieThDTzg&cid=2866592D5C55DF8C&id=2866592D5C55DF8C%21s2efcd635a61a430eaa19d3c916218123&parId=2866592D5C55DF8C%21s9f28b4cbda88424c8c43f9eb9011c7f6&o=OneUp", "desc": "Full weight package"},
         ]
     }
 }
@@ -117,7 +124,7 @@ def download_file(option, base_dir):
     
     if os.path.exists(dest_path):
         print(f" [SKIP] {name} already exists.")
-        return True
+        return dest_path
 
     print(f" [DOWNLOADING] {name}...")
     try:
@@ -128,11 +135,37 @@ def download_file(option, base_dir):
             subprocess.run(["curl", "-L", option["url"], "-o", dest_path], check=True)
         else:
             print(f" [ERROR] No valid URL or Google Drive ID for {name}")
-            return False
-        return True
+            return None
+        return dest_path
     except Exception as e:
         print(f" [ERROR] Failed to download {name}: {e}")
-        return False
+        return None
+
+def prompt_manual_download(option, base_dir):
+    name = option.get("dest_name", option["name"])
+    dest_path = os.path.join(base_dir, name)
+    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+
+    url = option.get("url")
+    if not url:
+        print(f" [ERROR] No URL available for {name}")
+        return None
+
+    print(f" [MANUAL DOWNLOAD] Opening browser for {name}...")
+    try:
+        webbrowser.open(url)
+    except Exception as e:
+        print(f" [WARNING] Could not open browser automatically: {e}")
+        print(f" [INFO] Please open this URL manually: {url}")
+
+    print(f" [ACTION REQUIRED] Save the file to: {dest_path}")
+    input(" Press ENTER once the download is complete...")
+
+    if not os.path.exists(dest_path):
+        print(f" [ERROR] File not found at {dest_path}")
+        return None
+
+    return dest_path
 
 def select_from_list(items, title, multi=True, descriptions=None):
     print(f"\n--- {title} ---")
@@ -187,7 +220,7 @@ def main():
         selected_models = model_names if args.all else select_from_list(model_names, "Select Models to Setup Environments")
 
         # 2. Weights Selection
-        weight_models = [m for m in WEIGHTS_DATA.keys()]
+        weight_models = [m for m in model_names if m in WEIGHTS_DATA]
         selected_weights = weight_models if args.all else select_from_list(weight_models, "Select Models to Download Weights")
 
         # 4. Specific Weight Selection (Detailed)
@@ -293,7 +326,11 @@ def main():
 
             base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), data["base_path"])
             for option in options:
-                download_file(option, base_dir)
+                if m_name == "DCVC-RT":
+                    dest_path = prompt_manual_download(option, base_dir)
+                else:
+                    dest_path = download_file(option, base_dir)
+
 
     print("\nSetup finished.")
 

@@ -21,6 +21,23 @@ from diffusers.utils.import_utils import is_xformers_available
 from my_utils.training_utils import parse_args_training, H5Dataset, CLIPLoss
 from StableCodec import StableCodec
 
+
+def _checkpoint_paths(output_dir):
+    ckpt_dir = os.path.join(output_dir, "checkpoints")
+    latest_path = os.path.join(ckpt_dir, "stablecodec_latest.pkl")
+    best_path = os.path.join(ckpt_dir, "stablecodec_best.pkl")
+    return ckpt_dir, latest_path, best_path
+
+
+def _cleanup_checkpoints(ckpt_dir, keep_names):
+    for fname in os.listdir(ckpt_dir):
+        if fname.startswith("stablecodec_base_") or fname in ["stablecodec_latest.pkl", "stablecodec_best.pkl"]:
+            if fname not in keep_names:
+                try:
+                    os.remove(os.path.join(ckpt_dir, fname))
+                except OSError:
+                    pass
+
         
 def main(args):
 
@@ -136,6 +153,8 @@ def main(args):
     mse_loss = torch.nn.MSELoss()
 
     global_step = 0
+    best_score = float("inf")
+    ckpt_dir, latest_path, best_path = _checkpoint_paths(args.output_dir)
     while global_step < args.max_train_steps:
         for batch in train_dataloader:
             l_acc = [net]
@@ -166,8 +185,8 @@ def main(args):
                 if accelerator.is_main_process:
 
                     if global_step % args.checkpointing_steps == 1:
-                        outf = os.path.join(args.output_dir, "checkpoints", f"stablecodec_base_{global_step}.pkl")
-                        accelerator.unwrap_model(net).save_model(outf)
+                        accelerator.unwrap_model(net).save_model(latest_path)
+                        _cleanup_checkpoints(ckpt_dir, {os.path.basename(latest_path), os.path.basename(best_path)})
 
                     if global_step % args.eval_freq == 1:
                         l_rate, l_y, l_z, l_psnr, l_lpips = [], [], [], [], []
@@ -212,10 +231,19 @@ def main(args):
                         logs["val/z"] = np.mean(l_z)
                         logs["val/psnr"] = np.mean(l_psnr)
                         logs["val/lpips"] = np.mean(l_lpips)
+                        score = logs["val/rate"] + logs["val/lpips"]
+                        if score < best_score:
+                            best_score = score
+                            accelerator.unwrap_model(net).save_model(best_path)
+                            _cleanup_checkpoints(ckpt_dir, {os.path.basename(latest_path), os.path.basename(best_path)})
                         progress_bar.set_postfix(**logs)
                         gc.collect()
                         torch.cuda.empty_cache()
                         accelerator.log(logs, step=global_step)
+
+    if accelerator.is_main_process:
+        accelerator.unwrap_model(net).save_model(latest_path)
+        _cleanup_checkpoints(ckpt_dir, {os.path.basename(latest_path), os.path.basename(best_path)})
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+import os
 import PIL.Image as Image
 import shutil
 import torch
@@ -100,7 +101,18 @@ class AverageMeter:
 
 
 def save_checkpoint(state, is_best, filename="checkpoint.pth.tar"):
-    torch.save(state, filename)
+    ckpt_dir = os.path.dirname(filename)
+    latest_path = os.path.join(ckpt_dir, "checkpoint_latest.pth.tar")
+    best_path = os.path.join(ckpt_dir, "checkpoint_best_loss.pth.tar")
+    torch.save(state, latest_path)
     if is_best:
-        best_filename = filename.replace(filename.split('/')[-1], "checkpoint_best_loss.pth.tar")
-        shutil.copyfile(filename, best_filename)
+        shutil.copyfile(latest_path, best_path)
+    for fname in os.listdir(ckpt_dir):
+        if not fname.startswith("checkpoint_"):
+            continue
+        fpath = os.path.join(ckpt_dir, fname)
+        if fpath not in [latest_path, best_path]:
+            try:
+                os.remove(fpath)
+            except OSError:
+                pass

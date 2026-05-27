@@ -379,8 +379,16 @@ class LICApp:
 
         self.config_canvas = tk.Canvas(self.config_tab, highlightthickness=0)
         self.config_scrollbar = ttk.Scrollbar(self.config_tab, orient="vertical", command=self.config_canvas.yview)
+        
+        # Static control area for non-dynamic settings
+        self.config_static_frame = ttk.Frame(self.config_tab, padding=5)
+        self.config_static_frame.pack(fill=tk.X, side=tk.TOP)
+        
+        self.equalize_var = tk.BooleanVar(value=True)
+        self.equalize_check = ttk.Checkbutton(self.config_static_frame, text="Equalize Bitrates", variable=self.equalize_var, command=self.on_equalize_toggle)
+        self.equalize_check.pack_forget() # Hidden by default
+        
         self.config_scrollable_frame = ttk.Frame(self.config_canvas)
-
         self.config_scrollable_frame.bind(
             "<Configure>",
             lambda e: self.config_canvas.configure(scrollregion=self.config_canvas.bbox("all"))
@@ -417,6 +425,9 @@ class LICApp:
         self.model_selector_right.pack(side=tk.LEFT, padx=5)
         self.model_selector_right.bind("<<ComboboxSelected>>", self.update_comparison)
 
+        self.equalize_compare_check = ttk.Checkbutton(comp_controls, text="Equalize", variable=self.equalize_var, command=self.on_equalize_toggle)
+        # Initially hidden
+        
         self.show_metrics_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(comp_controls, text="Show Metrics", variable=self.show_metrics_var, command=self.update_comparison).pack(side=tk.LEFT, padx=15)
 
@@ -440,6 +451,36 @@ class LICApp:
         self.log_area = tk.Text(self.sidebar, height=8, font=self.F_LOG, bg="#ffffff", fg="#333333", highlightthickness=1, highlightbackground="#cccccc")
         self.log_area.pack(fill=tk.BOTH, expand=True, pady=(20, 0))
         self.log_area.bind("<Key>", self.block_input)
+
+    def on_equalize_toggle(self):
+        self.on_model_select() # Refresh UI to show/hide synchronized QPs
+
+    def sync_qp(self, source_var, *args):
+        if not self.equalize_var.get(): return
+        try:
+            new_val = source_var.get()
+        except:
+            return
+        standard_codecs = ["AVC", "HEVC", "AV1"]
+        for mname in self.selected_model_names:
+            if mname in standard_codecs:
+                qp_var = self.model_configs[mname]["args"].get("qp")
+                if qp_var and qp_var.get() != new_val:
+                    qp_var.set(new_val)
+
+    def sync_standard_qps(self):
+        if not self.equalize_var.get():
+            return
+        standard_codecs = ["AVC", "HEVC", "AV1"]
+        first_qp_var = None
+        for mname in self.selected_model_names:
+            if mname in standard_codecs:
+                qp_var = self.model_configs.get(mname, {}).get("args", {}).get("qp")
+                if qp_var:
+                    if first_qp_var is None:
+                        first_qp_var = qp_var
+                    elif qp_var.get() != first_qp_var.get():
+                        qp_var.set(first_qp_var.get())
 
     def toggle_error_options(self, event=None):
         if self.error_type_var.get() != "None":
@@ -588,8 +629,19 @@ class LICApp:
 
         self.metrics_model_sel['values'] = self.selected_model_names
 
+        # Toggle equalize visibility
+        standard_codecs = ["AVC", "HEVC", "AV1"]
+        selected_standards = [m for m in self.selected_model_names if m in standard_codecs]
+        if len(selected_standards) >= 2:
+            self.equalize_check.pack(side=tk.TOP, pady=5)
+        else:
+            self.equalize_var.set(False)
+            self.equalize_check.pack_forget()
+
         for name in self.selected_model_names:
             self.build_model_config_ui(name)
+
+        self.sync_standard_qps()
         
         self.update_comparison()
 
@@ -600,10 +652,11 @@ class LICApp:
         interface_cls = self.registry[model_name]
         required_args = getattr(interface_cls, 'REQUIRED_ARGS', [])
         show_advanced = self.show_advanced_var.get()
-
+        standard_codecs = ["AVC", "HEVC", "AV1"]
+        
         if model_name not in self.model_configs:
             # Set workdir to LIC-Models for standard codecs, otherwise LIC-Models/Name
-            workdir_val = "LIC-Models" if model_name in ["AVC", "HEVC", "VVC", "AV1"] else f"LIC-Models/{model_name}"
+            workdir_val = "LIC-Models" if model_name in standard_codecs else f"LIC-Models/{model_name}"
 
             self.model_configs[model_name] = {
                 "args": {},
@@ -614,8 +667,10 @@ class LICApp:
             defaults = getattr(interface_cls, 'DEFAULT_VARS', {})
             for k, v in defaults.items():
                 if k in ['data', 'dataset', 'input', 'input_dir', 'save_dir', 'output']: continue
-                self.model_configs[model_name]["args"][k] = tk.StringVar(value="" if v is None else str(v))
-
+                var = tk.StringVar(value="" if v is None else str(v))
+                if model_name in standard_codecs and k == "qp":
+                    var.trace_add("write", lambda *args, v=var: self.sync_qp(v, *args))
+                self.model_configs[model_name]["args"][k] = var
             for req in required_args:
                 if req in ['data', 'dataset', 'input', 'input_dir', 'save_dir', 'output']: continue
                 if req not in self.model_configs[model_name]["args"]:
@@ -651,7 +706,7 @@ class LICApp:
             # Filter what to show in non-advanced mode
             if not show_advanced:
                 # For standard codecs, only show QP and Use GPU
-                if model_name in ["AVC", "HEVC", "VVC", "AV1"]:
+                if model_name in ["AVC", "HEVC", "AV1"]:
                     if arg_name.lower() not in ["qp", "use_gpu"]:
                         continue
                 else:
@@ -735,8 +790,13 @@ class LICApp:
             return None
 
         output_base = os.path.expanduser(self.out_dir_var.get().strip())
+        standard_codecs = ["AVC", "HEVC", "AV1"]
+        selected_standards = [m for m in self.selected_model_names if m in standard_codecs]
+        equalize_enabled = self.equalize_var.get() and len(selected_standards) >= 2
         tasks = {}
         eval_tasks = []
+        standard_equalize_config = None
+        standard_use_gpu = None
         for model_name in self.selected_model_names:
             config = self.model_configs[model_name]
             final_args = {}
@@ -801,6 +861,22 @@ class LICApp:
                 "input_dir": gt_dir
             })
 
+            if model_name in standard_codecs and equalize_enabled:
+                if standard_equalize_config is None:
+                    standard_equalize_config = {
+                        "codec_list": ",".join(selected_standards),
+                        "qp": final_args.get("qp"),
+                        "use_gpu": final_args.get("use_gpu"),
+                        "input_dir": gt_dir,
+                        "save_dir": model_out,
+                        "workdir": os.path.join(ROOT_DIR, config["workdir"].get()),
+                        "env_path": model_env if model_env and os.path.exists(model_env) else None
+                    }
+                    standard_use_gpu = final_args.get("use_gpu")
+                else:
+                    if standard_use_gpu != final_args.get("use_gpu"):
+                        self.log("[GUI] Warning: Equalize enabled, but standard codecs have different 'use_gpu' values. Using the first codec's setting.\n")
+
         # Derive eval environment path
         eval_env_path = find_env("eval-env")
         if not eval_env_path or not os.path.exists(eval_env_path):
@@ -855,10 +931,74 @@ class LICApp:
 
 
         try:
+            standard_equalized = False
+            standard_elapsed = 0.0
             for model_name, task_info in tasks.items():
                 start_t = time.time()
                 self.log(f"\n[GUI] Starting Task: {model_name}...\n")
-                
+
+                if equalize_enabled and model_name in standard_codecs:
+                    if not standard_equalized:
+                        if not standard_equalize_config:
+                            self.log("[GUI ERROR] Equalize enabled, but no standard codec config was found.\n")
+                            raise RuntimeError("Missing standard codec config for equalization")
+                        
+                        python_exec = sys.executable
+                        env_path = standard_equalize_config.get("env_path")
+                        if env_path:
+                            if os.path.isdir(os.path.join(env_path, "Scripts")):
+                                python_exec = os.path.join(env_path, "Scripts", "python.exe")
+                            else:
+                                python_exec = os.path.join(env_path, "bin", "python3")
+
+                        cmd = [
+                            python_exec,
+                            os.path.join(ROOT_DIR, "LIC-Models", "Standard-Codecs", "eval_standard.py"),
+                            "--codec", standard_equalize_config["codec_list"],
+                            "--qp", str(standard_equalize_config["qp"]),
+                            "--input_dir", standard_equalize_config["input_dir"],
+                            "--save_dir", standard_equalize_config["save_dir"]
+                        ]
+                        if standard_equalize_config.get("use_gpu"):
+                            cmd.append("--use_gpu")
+                        cmd.append("--equalize")
+
+                        self.log(f"[GUI] Equalizing standard codecs: {standard_equalize_config['codec_list']}\n")
+                        subprocess.run(cmd, cwd=standard_equalize_config.get("workdir"))
+                        standard_elapsed = time.time() - start_t
+                        standard_equalized = True
+
+                    # Run evaluation for this specific model immediately to get metrics
+                    this_eval_env = eval_env_path if os.path.exists(eval_env_path) else "n/a"
+                    python_exec = sys.executable
+                    if this_eval_env != "n/a":
+                        if os.path.isdir(os.path.join(this_eval_env, "Scripts")):
+                            python_exec = os.path.join(this_eval_env, "Scripts", "python.exe")
+                        else:
+                            python_exec = os.path.join(this_eval_env, "bin", "python3")
+
+                    eval_job = next(j for j in eval_tasks if j["task_name"] == model_name)
+                    cmd = [
+                        python_exec, os.path.join(ROOT_DIR, "evaluation.py"),
+                        "--task_name", model_name,
+                        "--save_dir", eval_job["save_dir"],
+                        "--input_dir", eval_job["input_dir"]
+                    ]
+                    subprocess.run(cmd)
+
+                    model_timings[model_name] = standard_elapsed
+
+                    # Update the metrics file with timing info
+                    metrics_file = os.path.join(eval_job["save_dir"], f"{model_name}_metrics.json")
+                    if os.path.exists(metrics_file):
+                        with open(metrics_file, 'r') as f:
+                            m_data = json.load(f)
+                        m_data["runtime_seconds"] = standard_elapsed
+                        with open(metrics_file, 'w') as f:
+                            json.dump(m_data, f, indent=4)
+
+                    continue
+
                 # Create a temporary single-task config for the dispatcher
                 temp_config = {
                     "testing": {
@@ -1075,9 +1215,12 @@ class LICApp:
                     pv = item.get("psnr_v", "N/A")
                     ssim = item.get("ssim", "N/A")
                     bpp = item.get("bpp", "N/A")
+                    qp = item.get("qp", None)
                     
                     line1 = f"PSNR: {psnr} | Y: {py} | U: {pu} | V: {pv}"
                     line2 = f"SSIM: {ssim} | bpp: {bpp}"
+                    if qp not in (None, "", "N/A"):
+                        line2 += f" | qp: {qp}"
                     return f"{line1}\n{line2}"
         return ""
 

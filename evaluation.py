@@ -83,6 +83,15 @@ def main():
     metrics = {"psnr": [], "psnr_y": [], "psnr_u": [], "psnr_v": [], "ssim": [], "lpips": [], "bpp": []}
     per_image_results = []
 
+    qp_map = {}
+    qp_map_path = os.path.join(base_save_path, "qp_map.json")
+    if os.path.exists(qp_map_path):
+        try:
+            with open(qp_map_path, "r") as f:
+                qp_map = json.load(f)
+        except Exception:
+            qp_map = {}
+
     print(f"Evaluating {len(recon_files)} images for {args.task_name} on {device}...")
 
     # 5. Evaluation Loop
@@ -160,7 +169,8 @@ def main():
 
         # Adaptive search for bitstream files
         bits_file = None
-        for b_cand in [f"{base_no_ext}.pt", f"bits_{base_no_ext}.pt", f"{base_no_ext}.bin", f"bits_{base_no_ext}.bin"]:
+        for b_cand in [f"{base_no_ext}.pt", f"bits_{base_no_ext}.pt", f"{base_no_ext}.bin", f"bits_{base_no_ext}.bin",
+                      f"{base_no_ext}.h264", f"{base_no_ext}.hevc", f"{base_no_ext}.ivf", f"{base_no_ext}.266"]:
             candidate_path = os.path.join(bits_dir, b_cand)
             if os.path.exists(candidate_path):
                 bits_file = candidate_path
@@ -186,7 +196,8 @@ def main():
             "psnr_v": round(psnr_v, 4),
             "ssim": round(float(ssim_val), 4),
             "lpips": round(lpips_val, 4),
-            "bpp": round(bpp_val, 4)
+            "bpp": round(bpp_val, 4),
+            "qp": qp_map.get(base_no_ext)
         })
 
     # 6. Compute Averages and Print results

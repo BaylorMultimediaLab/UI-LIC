@@ -602,9 +602,12 @@ class LICApp:
         show_advanced = self.show_advanced_var.get()
 
         if model_name not in self.model_configs:
+            # Set workdir to LIC-Models for standard codecs, otherwise LIC-Models/Name
+            workdir_val = "LIC-Models" if model_name in ["AVC", "HEVC", "VVC", "AV1"] else f"LIC-Models/{model_name}"
+
             self.model_configs[model_name] = {
                 "args": {},
-                "workdir": tk.StringVar(value=f"LIC-Models/{model_name}"),
+                "workdir": tk.StringVar(value=workdir_val),
                 "env": tk.StringVar()
             }
 
@@ -647,18 +650,22 @@ class LICApp:
         for arg_name, var in config["args"].items():
             # Filter what to show in non-advanced mode
             if not show_advanced:
-                # Always hide things that are standard defaults or handled elsewhere
-                if arg_name.lower() in ['cuda', 'experiment', 'test_batch_size', 'num_workers', 'real', 'clip_max_norm', 'save_dir', 'output', 'train_dataset', 'test_dataset']:
-                    continue
-                
-                # Only show if required, or if it doesn't have a default value in DEFAULT_VARS (meaning it's essential to provide)
-                is_required = arg_name in required_args
-                has_default = arg_name in getattr(interface_cls, 'DEFAULT_VARS', {})
-                
-                # If it's not required and has a default, skip it in simple mode
-                if not is_required and has_default:
-                    continue
+                # For standard codecs, only show QP
+                if model_name in ["AVC", "HEVC", "VVC", "AV1"]:
+                    if arg_name.lower() != "qp":
+                        continue
+                else:
+                    # Always hide things that are standard defaults or handled elsewhere
+                    if arg_name.lower() in ['cuda', 'experiment', 'test_batch_size', 'num_workers', 'real', 'clip_max_norm', 'save_dir', 'output', 'train_dataset', 'test_dataset']:
+                        continue
 
+                    # Only show if required, or if it doesn't have a default value in DEFAULT_VARS (meaning it's essential to provide)
+                    is_required = arg_name in required_args
+                    has_default = arg_name in getattr(interface_cls, 'DEFAULT_VARS', {})
+
+                    # If it's not required and has a default, skip it in simple mode
+                    if not is_required and has_default:
+                        continue
             arg_lower = arg_name.lower()
             is_file = any(x in arg_lower for x in ['checkpoint', 'model', 'file', 'elic', 'codec', 'pth', 'pkl', 'weights'])
             is_dir = any(x in arg_lower for x in ['dir', 'dataset', 'folder', 'save'])

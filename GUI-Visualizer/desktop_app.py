@@ -802,17 +802,21 @@ class LICApp:
                     if arg_name.lower() not in ["qp", "use_gpu"]:
                         continue
                 else:
+                    # Always show qp even in simple mode.
+                    if arg_name.lower() == "qp":
+                        pass
+                    else:
                     # Always hide things that are standard defaults or handled elsewhere
-                    if arg_name.lower() in ['cuda', 'experiment', 'test_batch_size', 'num_workers', 'real', 'clip_max_norm', 'save_dir', 'output', 'train_dataset', 'test_dataset']:
-                        continue
+                        if arg_name.lower() in ['cuda', 'experiment', 'test_batch_size', 'num_workers', 'real', 'clip_max_norm', 'save_dir', 'output', 'train_dataset', 'test_dataset']:
+                            continue
 
-                    # Only show if required, or if it doesn't have a default value in DEFAULT_VARS (meaning it's essential to provide)
-                    is_required = arg_name in required_args
-                    has_default = arg_name in getattr(interface_cls, 'DEFAULT_VARS', {})
+                        # Only show if required, or if it doesn't have a default value in DEFAULT_VARS (meaning it's essential to provide)
+                        is_required = arg_name in required_args
+                        has_default = arg_name in getattr(interface_cls, 'DEFAULT_VARS', {})
 
-                    # If it's not required and has a default, skip it in simple mode
-                    if not is_required and has_default:
-                        continue
+                        # If it's not required and has a default, skip it in simple mode
+                        if not is_required and has_default:
+                            continue
             arg_lower = arg_name.lower()
             is_file = any(x in arg_lower for x in ['checkpoint', 'model', 'file', 'elic', 'codec', 'pth', 'pkl', 'weights'])
             is_dir = any(x in arg_lower for x in ['dir', 'dataset', 'folder', 'save'])

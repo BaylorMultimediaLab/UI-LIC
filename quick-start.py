@@ -38,13 +38,14 @@ WEIGHTS_DATA = {
             {"name": "stablecodec_ft16.pkl", "id": "1Yu2F-9BKd9gDq6c9J7cBsC4_gy2bIHg_", "desc": "~0.010 bpp"},
             {"name": "stablecodec_ft24.pkl", "id": "1grLxmLuth4ydXhghZwa9wxGhjnRGzXim", "desc": "~0.008 bpp"},
             {"name": "stablecodec_ft32.pkl", "id": "1quyX_-g4B05DQrMb5bGlonaFrOlLyd8i", "desc": "~0.005 bpp (Highest compression)"},
+            {"name": "elic_official.pth", "id": "1jUfYJdZd0-bYUsoOUWwEpI5t1MZYP3AP", "dest_name": "elic.pth", "desc": "Official ELIC auxiliary model"},
         ]
     },
     "ELIC": {
         "base_path": "LIC-Models/ELIC/weights/",
         "description": "Auxiliary ELIC pretrained model used by StableCodec.",
         "options": [
-            {"name": "elic_official.pth", "id": "1jUfYJdZd0-bYUsoOUWwEpI5t1MZYP3AP", "dest_name": "elic.pth", "desc": "Official ELIC auxiliary model"},
+            {"name": "elic_unofficial.pth", "id": "1uuKQJiozcBfgGMJ8CfM6lrXOZWv6RUDN", "dest_name": "elic.pth", "desc": "Official ELIC auxiliary model"},
         ]
     },
     "RwkvCompress": {

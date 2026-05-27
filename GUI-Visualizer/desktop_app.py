@@ -791,6 +791,7 @@ class LICApp:
         output_base = os.path.expanduser(self.out_dir_var.get().strip())
         standard_codecs = ["AVC", "HEVC", "AV1"]
         selected_standards = [m for m in self.selected_model_names if m in standard_codecs]
+        learning_models = [m for m in self.selected_model_names if m not in standard_codecs]
         equalize_enabled = self.equalize_var.get() and len(selected_standards) >= 2
         tasks = {}
         eval_tasks = []
@@ -929,10 +930,39 @@ class LICApp:
         subprocess.check_call = custom_check_call
 
 
+        def build_learning_target_map():
+            target_map = {}
+            for model_name in learning_models:
+                metrics_path = os.path.join(output_base, model_name, f"{model_name}_metrics.json")
+                if not os.path.exists(metrics_path):
+                    self.log(f"[GUI] Warning: Metrics not found for {model_name}; skipping as target source.\n")
+                    continue
+                try:
+                    with open(metrics_path, "r") as f:
+                        data = json.load(f)
+                except Exception as e:
+                    self.log(f"[GUI] Warning: Failed to read metrics for {model_name}: {e}\n")
+                    continue
+                for item in data.get("per_image_metrics", []):
+                    img_name = item.get("image_name")
+                    bpp_val = item.get("bpp")
+                    if not img_name or not isinstance(bpp_val, (int, float)):
+                        continue
+                    base = os.path.splitext(img_name)[0]
+                    if base not in target_map or bpp_val < target_map[base]:
+                        target_map[base] = bpp_val
+            return target_map
+
         try:
             standard_equalized = False
             standard_elapsed = 0.0
-            for model_name, task_info in tasks.items():
+            target_bpp_json = None
+            ordered_models = list(self.selected_model_names)
+            if equalize_enabled and learning_models:
+                ordered_models = learning_models + [m for m in self.selected_model_names if m in standard_codecs]
+
+            for model_name in ordered_models:
+                task_info = tasks[model_name]
                 start_t = time.time()
                 self.log(f"\n[GUI] Starting Task: {model_name}...\n")
 
@@ -941,6 +971,16 @@ class LICApp:
                         if not standard_equalize_config:
                             self.log("[GUI ERROR] Equalize enabled, but no standard codec config was found.\n")
                             raise RuntimeError("Missing standard codec config for equalization")
+
+                        if learning_models and not target_bpp_json:
+                            target_map = build_learning_target_map()
+                            if target_map:
+                                target_bpp_json = os.path.join(output_base, "standard_equalize_targets.json")
+                                with open(target_bpp_json, "w") as f:
+                                    json.dump(target_map, f, indent=4)
+                                self.log("[GUI] Using learning-based bpp targets for standard codec equalization.\n")
+                            else:
+                                self.log("[GUI] Warning: No learning-based bpp targets found; using standard anchor only.\n")
                         
                         python_exec = sys.executable
                         env_path = standard_equalize_config.get("env_path")
@@ -960,6 +1000,8 @@ class LICApp:
                         ]
                         if standard_equalize_config.get("use_gpu"):
                             cmd.append("--use_gpu")
+                        if target_bpp_json:
+                            cmd.extend(["--target_bpp_json", target_bpp_json])
                         cmd.append("--equalize")
 
                         self.log(f"[GUI] Equalizing standard codecs: {standard_equalize_config['codec_list']}\n")

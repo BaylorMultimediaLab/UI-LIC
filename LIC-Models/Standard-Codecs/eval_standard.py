@@ -25,6 +25,7 @@ def main():
     parser.add_argument("--qp", type=int, default=23)
     parser.add_argument("--use_gpu", action="store_true", help="Use GPU-based encoder (NVENC) if available.")
     parser.add_argument("--equalize", action="store_true", help="Perform 2-stage equalization to match bitrate of most efficient codec.")
+    parser.add_argument("--target_bpp_json", type=str, default=None, help="Optional per-image target bpp map (JSON).")
     parser.add_argument("--input_dir", type=str, required=True)
     parser.add_argument("--save_dir", type=str, required=True)
     args = parser.parse_args()
@@ -79,6 +80,15 @@ def main():
     coarse_step = 7
     fine_step = 1
 
+    target_bpp_map = {}
+    if args.target_bpp_json:
+        try:
+            with open(args.target_bpp_json, "r") as f:
+                target_bpp_map = json.load(f)
+        except Exception as e:
+            log(f"[WARNING] Failed to load target bpp map: {e}")
+            target_bpp_map = {}
+
     for img_path in image_files:
         base_name = img_path.stem
         with Image.open(img_path) as img:
@@ -112,9 +122,18 @@ def main():
             # Stage 2: Equalization
             # "The codec with the lowest resulting bpp is selected as the anchor."
             anchor_codec = min(results, key=lambda k: results[k]["bpp"])
-            target_bpp = results[anchor_codec]["bpp"]
-            
-            log(f"  -> [{base_name}] Anchor: {anchor_codec} at {target_bpp:.4f} bpp")
+            standard_anchor_bpp = results[anchor_codec]["bpp"]
+            target_bpp = standard_anchor_bpp
+
+            learning_target = target_bpp_map.get(base_name)
+            if isinstance(learning_target, (int, float)) and learning_target > 0:
+                target_bpp = min(target_bpp, learning_target)
+                log(
+                    f"  -> [{base_name}] Anchor: {anchor_codec} at {standard_anchor_bpp:.4f} bpp | "
+                    f"Learning target: {learning_target:.4f} bpp"
+                )
+            else:
+                log(f"  -> [{base_name}] Anchor: {anchor_codec} at {target_bpp:.4f} bpp")
             
             for cname in selected_codecs:
                 if cname == anchor_codec: continue

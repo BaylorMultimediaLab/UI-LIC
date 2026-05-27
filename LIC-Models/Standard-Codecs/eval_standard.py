@@ -7,6 +7,9 @@ import json
 from pathlib import Path
 from PIL import Image
 
+def log(msg):
+    print(msg, flush=True)
+
 def run_command(cmd):
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
@@ -65,13 +68,16 @@ def main():
         print(f"No images found in {args.input_dir}")
         return
 
-    print(f"Evaluating {len(image_files)} images using {args.codec} (QP={args.qp}, Equalize={args.equalize})...")
+    log(f"Evaluating {len(image_files)} images using {args.codec} (QP={args.qp}, Equalize={args.equalize})...")
 
     qp_bounds = {
         "AVC": (0, 51),
         "HEVC": (0, 51),
-        "AV1": (0, 63)
+        "AV1": (0, 255)
     }
+
+    coarse_step = 7
+    fine_step = 1
 
     for img_path in image_files:
         base_name = img_path.stem
@@ -108,10 +114,11 @@ def main():
             anchor_codec = min(results, key=lambda k: results[k]["bpp"])
             target_bpp = results[anchor_codec]["bpp"]
             
-            print(f"  -> [{base_name}] Anchor: {anchor_codec} at {target_bpp:.4f} bpp")
+            log(f"  -> [{base_name}] Anchor: {anchor_codec} at {target_bpp:.4f} bpp")
             
             for cname in selected_codecs:
                 if cname == anchor_codec: continue
+                log(f"  -> [{base_name}] Equalizing {cname}...")
                 
                 # Search for best QP to match target_bpp
                 best_qp = results[cname]["qp"]
@@ -125,10 +132,10 @@ def main():
                 attempts = 0
                 max_attempts = max_qp - min_qp
                 while attempts < max_attempts:
-                    curr_qp += direction
+                    curr_qp += direction * coarse_step
                     if curr_qp < min_qp or curr_qp > max_qp:
                         break
-                    attempts += 1
+                    attempts += coarse_step
 
                     cfg = get_codec_config(cname, curr_qp, args.use_gpu)
                     tmp_bit = results[cname]["bit_path"].with_suffix(".tmp")
@@ -148,7 +155,32 @@ def main():
                                 os.remove(tmp_bit)
                     else:
                         break
-                print(f"    - {cname} equalized to QP {best_qp} ({results[cname]['bpp']:.4f} bpp)")
+
+                # Fine adjustment around best QP
+                fine_min = max(min_qp, best_qp - coarse_step)
+                fine_max = min(max_qp, best_qp + coarse_step)
+                for curr_qp in range(fine_min, fine_max + 1, fine_step):
+                    if curr_qp == best_qp:
+                        continue
+                    cfg = get_codec_config(cname, curr_qp, args.use_gpu)
+                    tmp_bit = results[cname]["bit_path"].with_suffix(".tmp")
+                    enc_cmd = ["ffmpeg", "-y", "-i", str(img_path), "-c:v", cfg["encoder"]] + cfg["args"] + ["-f", cfg["ext"], str(tmp_bit)]
+
+                    if run_command(enc_cmd):
+                        bpp = (os.path.getsize(tmp_bit) * 8) / (w * h)
+                        diff = abs(bpp - target_bpp)
+                        if diff < best_diff:
+                            best_diff = diff
+                            best_qp = curr_qp
+                            os.replace(tmp_bit, results[cname]["bit_path"])
+                            results[cname]["bpp"] = bpp
+                            results[cname]["qp"] = curr_qp
+                        else:
+                            if os.path.exists(tmp_bit):
+                                os.remove(tmp_bit)
+                    else:
+                        break
+                log(f"    - {cname} equalized to QP {best_qp} ({results[cname]['bpp']:.4f} bpp)")
 
         # Final decoding for the chosen QPs
         for cname, res in results.items():
@@ -165,7 +197,7 @@ def main():
         with open(qp_path, "w") as f:
             json.dump(qp_map, f, indent=4)
 
-    print(f"Evaluation completed.")
+    log("Evaluation completed.")
 
 if __name__ == "__main__":
     main()

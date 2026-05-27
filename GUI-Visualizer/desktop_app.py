@@ -635,7 +635,6 @@ class LICApp:
         if len(selected_standards) >= 2:
             self.equalize_check.pack(side=tk.TOP, pady=5)
         else:
-            self.equalize_var.set(False)
             self.equalize_check.pack_forget()
 
         for name in self.selected_model_names:

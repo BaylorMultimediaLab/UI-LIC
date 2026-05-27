@@ -88,8 +88,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # 3. Initialize Models
-    loss_fn_alex = lpips.LPIPS(net='alex')
-    loss_fn_alex.to(device)
+    loss_fn_alex = lpips.LPIPS(net='alex',spatial=True).to(device)
 
     print(f"DEBUG: checking save_dir {args.save_dir}")
 
@@ -114,9 +113,11 @@ def main():
     ssim_dir = os.path.join(os.path.dirname(recon_dir), "ssim_map")
     psnr_map_dir = os.path.join(os.path.dirname(recon_dir), "psnr_map")
     grad_dir = os.path.join(os.path.dirname(recon_dir), "grad_map")
+    lpips_map_dir = os.path.join(os.path.dirname(recon_dir), "lpips_map")
     os.makedirs(ssim_dir, exist_ok=True)
     os.makedirs(psnr_map_dir, exist_ok=True)
     os.makedirs(grad_dir, exist_ok=True)
+    os.makedirs(lpips_map_dir, exist_ok=True)
 
     bits_dir = None
     for root, dirs, files in os.walk(base_save_path):
@@ -184,7 +185,17 @@ def main():
 
         # Calculate RGB Metrics
         psnr_val = psnr(rec, gt, data_range=1.0).item()
-        lpips_val = loss_fn_alex(rec * 2 - 1, gt * 2 - 1).item()
+        lpips_val, lpips_res = loss_fn_alex(rec, gt,retPerLayer=True, normalize=True)
+        lpips_val = lpips_val.mean().item()
+        # Stack into [5, 1, H, W], then sum or average over the first axis (layer)
+        lpips_error_maps = torch.stack([r for r in lpips_res], dim=0)  # [5, 1, H, W]
+
+        # Remove the channel dimension and average/sum over layers
+        lpips_heatmap = lpips_error_maps.mean(dim=0)  # [1, H, W], or .sum(dim=0) for sum
+        lpips_heatmap = lpips_heatmap.squeeze(0)      # [H, W]
+        
+        #debug print shape of lpips_res
+        print(f"DEBUG: LPIPS layer outputs for {r_file}: {[res.shape for res in lpips_res]}")
         
         # SSIM with Map (scikit-image)
         # Move to CPU/Numpy for skimage
@@ -224,6 +235,20 @@ def main():
         grad_map = compute_color_gradient(rec_np)
         grad_map_img = Image.fromarray(grad_map)
         grad_map_img.save(os.path.join(grad_dir, f"{base_no_ext}.png"))
+
+        # Save LPIPS Heatmap
+        heatmap_np = lpips_heatmap.detach().cpu().numpy()
+        # Ensure 2D shape (H, W)
+        if len(heatmap_np.shape) == 3:
+             heatmap_np = heatmap_np.squeeze(0) # [1, H, W] -> [H, W]
+        
+        # Normalize for visualization
+        h_min, h_max = heatmap_np.min(), heatmap_np.max()
+        if h_max > h_min:
+            heatmap_np = (heatmap_np - h_min) / (h_max - h_min)
+            
+        lpips_heatmap_img = Image.fromarray((np.clip(heatmap_np, 0, 1) * 255).astype(np.uint8))
+        lpips_heatmap_img.save(os.path.join(lpips_map_dir, f"{base_no_ext}_lpips.png"))
 
         # Calculate YUV Metrics
         gt_yuv = rgb_to_yuv(gt)

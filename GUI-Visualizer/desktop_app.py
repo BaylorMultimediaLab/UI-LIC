@@ -444,7 +444,7 @@ class LICApp:
 
         ttk.Label(comp_controls, text="Show Error:", font=self.F_BTN).pack(side=tk.LEFT, padx=(10, 5))
         self.error_type_var = tk.StringVar(value="None")
-        self.error_selector = ttk.Combobox(comp_controls, state="readonly", width=8, textvariable=self.error_type_var, values=["None", "PSNR", "SSIM", "Gradient"], font=self.F_BASE)
+        self.error_selector = ttk.Combobox(comp_controls, state="readonly", width=8, textvariable=self.error_type_var, values=["None", "PSNR", "SSIM", "LPIPS", "Gradient"], font=self.F_BASE)
         self.error_selector.pack(side=tk.LEFT)
         self.error_selector.bind("<<ComboboxSelected>>", self.toggle_error_options)
 
@@ -1366,9 +1366,12 @@ class LICApp:
                     
                     line1 = f"PSNR: {psnr} | Y: {py} | U: {pu} | V: {pv}"
                     vmaf = item.get("vmaf", None)
+                    lpips = item.get("lpips", None)
                     line2 = f"bpp: {bpp}"
                     if vmaf not in (None, "", "N/A"):
                         line2 = f"VMAF: {vmaf} | {line2}"
+                        if lpips not in (None, "", "N/A"):
+                            line2 = f"VMAF: {vmaf} | LPIPS: {lpips} | bpp: {bpp}"
                     line2 = f"SSIM: {ssim} | {line2}"
                     if qp not in (None, "", "N/A"):
                         line2 += f" | qp: {qp}"
@@ -1395,6 +1398,7 @@ class LICApp:
         if show_error:
             if error_type == "PSNR": subfolder = "psnr_map"
             elif error_type == "SSIM": subfolder = "ssim_map"
+            elif error_type == "LPIPS": subfolder = "lpips_map"
             elif error_type == "Gradient": subfolder = "grad_map"
 
         if show_error and use_overlay:
@@ -1424,8 +1428,7 @@ class LICApp:
             label1=model_right, label2=model_left,
             metrics1=metrics_right, metrics2=metrics_left,
             show_metrics=show_m,
-            invert_overlay=invert_overlay,
-            overlay_mode=overlay_mode
+            invert_overlay=invert_overlay
         )
 
         log_msg = f"[Viewer] Comparing: {model_left} vs {model_right} ({selected_img})"

@@ -882,7 +882,7 @@ class LICApp:
         if not eval_env_path or not os.path.exists(eval_env_path):
              self.log(f"[WARNING] Evaluation environment 'eval-env' not found.\n")
              if not self.show_advanced_var.get():
-                self.log("[HINT] Evaluation requires 'evaluation.py' to run in a specific environment. Ensure it was created via quick-start-env.py or set it in Advanced Mode.\n")
+                self.log("[HINT] Evaluation requires 'evaluation.py' to run in a specific environment. Ensure it was created via quick-start.py or set it in Advanced Mode.\n")
 
         # Track total run time per model
         model_timings = {}

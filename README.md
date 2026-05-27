@@ -6,18 +6,38 @@ This repository provides a unified framework for managing, training, and testing
 
 ## Core Workflow
 
-### 1. Environment Setup (`create-env.py` & `quick-start-env.py`)
+### 1. Environment Setup (`create-env.py` & `quick-start.py`)
 Each LIC model often requires a specific environment with distinct dependencies. 
 
 - **Individual Setup (`create-env.py`):** Use this to create an environment for a single model with custom settings.
   ```bash
   python create-env.py
   ```
-- **Batch Setup (`quick-start-env.py`, recommended!) :** Use this to automatically create environments for ALL integrated models at once in a specified directory.
+- **Batch Setup (`quick-start.py`, recommended!) :** Use this to automatically create environments and download weights for ALL integrated models at once.
   ```bash
-  python quick-start-env.py [optional base_path]
+  python quick-start.py [optional base_path]
   ```
-  This script uses the recommended Python versions and requirements files defined for each model automatically.
+  **Features:**
+  - **Interactive Selection:** Choose specifically which models to set up and which pretrained weights to download.
+  - **Quality/Lambda Selection:** For models like StableCodec or HPCM, you can select specific quality levels to save bandwidth and disk space.
+  - **Confirmation Summary:** Review a full plan (including checks for previously installed environments or weights) before any changes are made.
+  - **Automatic Dependency Mapping:** Uses the recommended Python versions and requirements files defined for each model automatically.
+
+---
+
+## Qualities & Weights Explanation
+
+Different models use different scales for their pretrained weights. Generally:
+- **Lambda (λ):** A higher λ value means the model is optimized for higher quality (and higher bitrate), while a lower λ means higher compression (and lower quality).
+- **Metric:** Models are typically optimized for either **MSE** (standard PSNR-focused) or **MS-SSIM** (perceptual-focused).
+
+### Model-Specific Scales:
+- **StableCodec:** Uses `ft` (finetuned) numbers. Higher numbers (e.g., `ft32`) target extreme compression (~0.005 bpp), while lower numbers (e.g., `ft2`) provide higher quality (~0.035 bpp).
+- **RwkvCompress (LALIC):** Uses quality levels `q1` to `q6`. `q1` is the highest compression (lowest bitrate), and `q6` is the highest quality.
+- **HPCM:** Provides **Base** and **Large** versions. Each has 6 quality levels for both MSE and MS-SSIM metrics.
+- **LIC-TCM:** Provides `N=128` (Large) and `N=64` (Small) variants. The quality ranges from λ=0.0025 (highest compression) to λ=0.05 (highest quality).
+
+---
 
 ### 2. Configuration Generation (`configure-jobs.py`)
 Instead of manually editing JSON files, use `configure-jobs.py` to interactively build your job queue.

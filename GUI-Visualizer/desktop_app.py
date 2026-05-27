@@ -16,6 +16,7 @@ import queue
 import json
 import subprocess
 import time
+import numpy as np
 from dispatcher import Dispatcher
 
 try:
@@ -49,12 +50,14 @@ class ComparisonCanvas(tk.Canvas):
 
     def set_images(self, path1, path2=None, overlay_path1=None, overlay_path2=None, 
                    label1="Right", label2="Left", metrics1="", metrics2="", 
-                   show_metrics=True, invert_overlay=True, overlay_mode="error"):
+                   show_metrics=True, invert_overlay=True, overlay_mode="error",
+                   lpips_layers=None):
         """
         path1: Right Image
         path2: Left Image
         overlay_pathX: Path to error map for blending
         invert_overlay: True for SSIM (brighter=good), False for PSNR/MSE (brighter=bad)
+        lpips_layers: List of 5 booleans for which LPIPS layers to show
         """
         self.label1 = label1
         self.label2 = label2
@@ -66,15 +69,14 @@ class ComparisonCanvas(tk.Canvas):
             if not img_path or not os.path.exists(img_path):
                 return None
             
+            is_direct_view = (map_path is None)
+            effective_map_path = map_path if map_path else img_path
+            
             img = Image.open(img_path).convert("RGB")
-            if not map_path or not os.path.exists(map_path):
-                return img
-
-            import numpy as np
             img_np = np.array(img).astype(np.float32)
 
-            if overlay_mode == "gradient":
-                grad_map = Image.open(map_path).convert("RGB")
+            if overlay_mode == "gradient" and not is_direct_view:
+                grad_map = Image.open(effective_map_path).convert("RGB")
                 if grad_map.size != img.size:
                     grad_map = grad_map.resize(img.size, Image.LANCZOS)
                 grad_np = np.array(grad_map).astype(np.float32)
@@ -83,8 +85,74 @@ class ComparisonCanvas(tk.Canvas):
                 blended = img_np * (1.0 - alpha_3d) + grad_np * alpha_3d
                 return Image.fromarray(blended.astype(np.uint8))
 
-            # Perform Blending
-            error_map = Image.open(map_path).convert("L")
+            if overlay_mode == "lpips":
+                # Only attempt multi-layer blending if this is actually an LPIPS context
+                # and we have layers selected.
+                is_lpips_context = "lpips" in effective_map_path.lower()
+                
+                if is_lpips_context and lpips_layers and any(lpips_layers):
+                    colors = [
+                        [255, 0, 0],   # Layer 0: Red
+                        [0, 255, 0],   # Layer 1: Green
+                        [0, 0, 255],   # Layer 2: Blue
+                        [255, 255, 0], # Layer 3: Yellow
+                        [255, 0, 255]  # Layer 4: Purple (Magenta)
+                    ]
+                    
+                    # Direct view on black, overlay view on reconstruction
+                    base_np = np.zeros_like(img_np) if is_direct_view else img_np
+                    overlay_accum = np.zeros_like(img_np)
+                    alpha_accum = np.zeros((img_np.shape[0], img_np.shape[1], 1), dtype=np.float32)
+                    
+                    any_layer_found = False
+                    for i, (show, color) in enumerate(zip(lpips_layers, colors)):
+                        if not show: continue
+                        
+                        if "_lpips.png" in effective_map_path:
+                            layer_path = effective_map_path.replace("_lpips.png", f"_lpips_layer{i}.png")
+                        else:
+                            layer_path = effective_map_path.replace(".png", f"_layer{i}.png")
+                            
+                        if not os.path.exists(layer_path): continue
+                        
+                        any_layer_found = True
+                        layer_map = Image.open(layer_path).convert("L")
+                        if layer_map.size != img.size:
+                            layer_map = layer_map.resize(img.size, Image.LANCZOS)
+                        
+                        map_np = np.array(layer_map).astype(np.float32) / 255.0
+                        alpha_val = 1.0 if is_direct_view else 0.8
+                        alpha = map_np * alpha_val
+                        alpha_3d = np.expand_dims(alpha, axis=2)
+                        
+                        color_img = np.zeros_like(img_np)
+                        color_img[:] = color
+                        
+                        overlay_accum += color_img * alpha_3d
+                        alpha_accum = np.maximum(alpha_accum, alpha_3d)
+                    
+                    if any_layer_found:
+                        overlay_accum = np.clip(overlay_accum, 0, 255)
+                        blended = base_np * (1.0 - alpha_accum) + overlay_accum
+                        return Image.fromarray(blended.astype(np.uint8))
+                    elif is_direct_view:
+                        # Layers selected but not found for this specific LPIPS map
+                        # Return black for the model side, but this branch shouldn't hit GT
+                        return Image.fromarray(np.zeros_like(img_np).astype(np.uint8))
+                
+                # Fallback for LPIPS mode: if it's not an LPIPS map (like GT), 
+                # or no layers were found/selected, just show the base image.
+                if is_direct_view:
+                    return img
+
+            if is_direct_view:
+                return img
+
+            # Perform Blending (Standard error map)
+            if not os.path.exists(effective_map_path):
+                return img
+
+            error_map = Image.open(effective_map_path).convert("L")
             if error_map.size != img.size:
                 error_map = error_map.resize(img.size, Image.LANCZOS)
             map_np = np.array(error_map).astype(np.float32) / 255.0
@@ -224,6 +292,7 @@ class LICApp:
         self.log_queue = queue.Queue()
         self.selected_model_names = []
         self.metrics_data = {} # {model_name: {averages: {}, per_image: []}}
+        self.lpips_layer_vars = [tk.BooleanVar(value=True) for _ in range(5)]
         
         self.setup_ui()
         self.load_metrics() # Added to load existing results on startup
@@ -448,6 +517,13 @@ class LICApp:
         self.error_selector.pack(side=tk.LEFT)
         self.error_selector.bind("<<ComboboxSelected>>", self.toggle_error_options)
 
+        self.lpips_layers_frame = ttk.Frame(comp_controls)
+        layer_colors = ["Red", "Green", "Blue", "Yellow", "Purple"]
+        for i in range(5):
+            chk = ttk.Checkbutton(self.lpips_layers_frame, text=f"L{i}", 
+                                  variable=self.lpips_layer_vars[i], command=self.update_comparison)
+            chk.pack(side=tk.LEFT, padx=2)
+
         self.ssim_overlay_var = tk.BooleanVar(value=True)
         self.ssim_overlay_check = ttk.Checkbutton(comp_controls, text="Overlay", variable=self.ssim_overlay_var, command=self.update_comparison)
         
@@ -567,10 +643,17 @@ class LICApp:
         self._apply_weight_autofill(model_name, force=True)
 
     def toggle_error_options(self, event=None):
-        if self.error_type_var.get() != "None":
+        error_type = self.error_type_var.get()
+        if error_type != "None":
             self.ssim_overlay_check.pack(side=tk.LEFT, padx=15)
         else:
             self.ssim_overlay_check.pack_forget()
+
+        if error_type == "LPIPS":
+            self.lpips_layers_frame.pack(side=tk.LEFT, padx=15)
+        else:
+            self.lpips_layers_frame.pack_forget()
+
         self.update_comparison()
 
     def refresh_sidebar_and_models(self):
@@ -1304,38 +1387,59 @@ class LICApp:
         if model_name == "Ground Truth":
             gt_dir = os.path.expanduser(self.gt_dir_var.get().strip())
             return os.path.join(gt_dir, selected_img)
-            
+
         out_base = os.path.expanduser(self.out_dir_var.get().strip())
         model_out = os.path.join(out_base, model_name)
         if not os.path.exists(model_out):
             return None
-            
+
         base_name = os.path.splitext(selected_img)[0]
-        
+
         # 1. Check for standard subfolder (reconstruction, ssim_map)
         target = os.path.join(model_out, subfolder)
         if os.path.exists(target):
-            for f in os.listdir(target):
-                if (f == selected_img or f.startswith(base_name)) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
+            files = os.listdir(target)
+
+            # Priority 1: Exact match (e.g. image.png)
+            if selected_img in files:
+                return os.path.join(target, selected_img)
+
+            # Priority 2: base_name + expected suffix (e.g. image_lpips.png)
+            if subfolder == "lpips_map":
+                for f in files:
+                    if f == f"{base_name}_lpips.png":
+                        return os.path.join(target, f)
+
+            # Priority 3: base_name + any standard extension, AVOIDING _layer
+            for f in files:
+                if f.startswith(base_name) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    if "_layer" in f: continue
                     return os.path.join(target, f)
-        
+
         # 2. Check for nested quality subfolders (RwkvCompress)
-        for q_dir in os.listdir(model_out):
+        for q_dir in sorted(os.listdir(model_out), reverse=True):
             if q_dir.startswith("quality_"):
                 target = os.path.join(model_out, q_dir, subfolder)
                 if os.path.exists(target):
-                    for f in os.listdir(target):
-                        if (f == selected_img or f.startswith(base_name)) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    files = os.listdir(target)
+                    if selected_img in files:
+                        return os.path.join(target, selected_img)
+                    if subfolder == "lpips_map":
+                        for f in files:
+                            if f == f"{base_name}_lpips.png":
+                                return os.path.join(target, f)
+                    for f in files:
+                        if f.startswith(base_name) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                            if "_layer" in f: continue
                             return os.path.join(target, f)
-                            
+
         # 3. Fallback to model root for reconstruction
         if subfolder == "reconstruction":
             for f in os.listdir(model_out):
                 if (f == selected_img or f.startswith(base_name)) and f.lower().endswith(('.png', '.jpg', '.jpeg')):
                     return os.path.join(model_out, f)
-        
-        return None
 
+        return None
     def get_metrics_string(self, model_name, selected_img, image_path):
         if model_name == "Ground Truth":
             if image_path and os.path.exists(image_path):
@@ -1391,7 +1495,8 @@ class LICApp:
         
         show_error = (error_type != "None")
         invert_overlay = (error_type == "SSIM")
-        overlay_mode = "gradient" if error_type == "Gradient" else "error"
+        overlay_mode = "lpips" if error_type == "LPIPS" else ("gradient" if error_type == "Gradient" else "error")
+        lpips_layers = [v.get() for v in self.lpips_layer_vars] if error_type == "LPIPS" else None
         
         # Determine base paths and overlay paths
         subfolder = "reconstruction"
@@ -1428,7 +1533,9 @@ class LICApp:
             label1=model_right, label2=model_left,
             metrics1=metrics_right, metrics2=metrics_left,
             show_metrics=show_m,
-            invert_overlay=invert_overlay
+            invert_overlay=invert_overlay,
+            overlay_mode=overlay_mode,
+            lpips_layers=lpips_layers
         )
 
         log_msg = f"[Viewer] Comparing: {model_left} vs {model_right} ({selected_img})"

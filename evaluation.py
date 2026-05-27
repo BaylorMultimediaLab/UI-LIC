@@ -236,19 +236,23 @@ def main():
         grad_map_img = Image.fromarray(grad_map)
         grad_map_img.save(os.path.join(grad_dir, f"{base_no_ext}.png"))
 
-        # Save LPIPS Heatmap
+        # Save LPIPS Heatmaps (Mean and individual layers)
         heatmap_np = lpips_heatmap.detach().cpu().numpy()
-        # Ensure 2D shape (H, W)
         if len(heatmap_np.shape) == 3:
-             heatmap_np = heatmap_np.squeeze(0) # [1, H, W] -> [H, W]
-        
-        # Normalize for visualization
+             heatmap_np = heatmap_np.squeeze(0)
         h_min, h_max = heatmap_np.min(), heatmap_np.max()
         if h_max > h_min:
             heatmap_np = (heatmap_np - h_min) / (h_max - h_min)
-            
         lpips_heatmap_img = Image.fromarray((np.clip(heatmap_np, 0, 1) * 255).astype(np.uint8))
         lpips_heatmap_img.save(os.path.join(lpips_map_dir, f"{base_no_ext}_lpips.png"))
+
+        for i, layer_map in enumerate(lpips_res):
+            layer_np = layer_map.squeeze().detach().cpu().numpy()
+            l_min, l_max = layer_np.min(), layer_np.max()
+            if l_max > l_min:
+                layer_np = (layer_np - l_min) / (l_max - l_min)
+            layer_img = Image.fromarray((np.clip(layer_np, 0, 1) * 255).astype(np.uint8))
+            layer_img.save(os.path.join(lpips_map_dir, f"{base_no_ext}_lpips_layer{i}.png"))
 
         # Calculate YUV Metrics
         gt_yuv = rgb_to_yuv(gt)

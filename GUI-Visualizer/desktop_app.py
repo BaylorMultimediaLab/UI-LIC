@@ -650,9 +650,9 @@ class LICApp:
         for arg_name, var in config["args"].items():
             # Filter what to show in non-advanced mode
             if not show_advanced:
-                # For standard codecs, only show QP
+                # For standard codecs, only show QP and Use GPU
                 if model_name in ["AVC", "HEVC", "VVC", "AV1"]:
-                    if arg_name.lower() != "qp":
+                    if arg_name.lower() not in ["qp", "use_gpu"]:
                         continue
                 else:
                     # Always hide things that are standard defaults or handled elsewhere

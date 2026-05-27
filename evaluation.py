@@ -9,6 +9,7 @@ from torchvision import transforms
 from piq import psnr 
 from skimage.metrics import structural_similarity as ssim
 import lpips
+import scipy.ndimage
 
 # Import Docker VMAF helper
 try:
@@ -16,6 +17,35 @@ try:
 except ImportError:
     calculate_vmaf = None
     check_docker_availability = None
+
+
+
+def compute_color_gradient(img_np):
+    if hasattr(img_np, "detach"):
+        img_np = img_np.detach().cpu().numpy()
+
+    if img_np.ndim == 4 and img_np.shape[0] == 1:
+        img_np = img_np[0]
+
+    if img_np.ndim == 3 and img_np.shape[0] == 3 and img_np.shape[-1] != 3:
+        img_np = np.transpose(img_np, (1, 2, 0))
+
+    if img_np.ndim == 3:
+        img_np = img_np.mean(axis=2)
+
+    grad_x = scipy.ndimage.sobel(img_np, axis=0, mode='reflect')
+    grad_y = scipy.ndimage.sobel(img_np, axis=1, mode='reflect')
+
+    grad_x_abs = np.abs(grad_x)
+    grad_y_abs = np.abs(grad_y)
+
+    grad_x_norm = grad_x_abs / (grad_x_abs.max() + 1e-8)
+    grad_y_norm = grad_y_abs / (grad_y_abs.max() + 1e-8)
+    grad_mag = np.sqrt(grad_x_abs**2 + grad_y_abs**2)
+    grad_mag_norm = (grad_mag - grad_mag.min()) / (grad_mag.max() - grad_mag.min() + 1e-8)
+
+    rgb = np.stack([grad_x_norm, grad_y_norm, grad_mag_norm], axis=-1)
+    return (rgb * 255).astype(np.uint8)
 
 def get_bpp(bitstream_path, width, height):
     if not os.path.exists(bitstream_path):
@@ -83,8 +113,10 @@ def main():
     # Derive ssim_map and psnr_map dirs from recon_dir parent
     ssim_dir = os.path.join(os.path.dirname(recon_dir), "ssim_map")
     psnr_map_dir = os.path.join(os.path.dirname(recon_dir), "psnr_map")
+    grad_dir = os.path.join(os.path.dirname(recon_dir), "grad_map")
     os.makedirs(ssim_dir, exist_ok=True)
     os.makedirs(psnr_map_dir, exist_ok=True)
+    os.makedirs(grad_dir, exist_ok=True)
 
     bits_dir = None
     for root, dirs, files in os.walk(base_save_path):
@@ -188,6 +220,11 @@ def main():
         psnr_map_img = Image.fromarray((np.clip(mse_map_gray, 0, 1) * 255).astype(np.uint8))
         psnr_map_img.save(os.path.join(psnr_map_dir, f"{base_no_ext}.png"))
         
+        # Calculate and Save Color Gradient Map
+        grad_map = compute_color_gradient(rec_np)
+        grad_map_img = Image.fromarray(grad_map)
+        grad_map_img.save(os.path.join(grad_dir, f"{base_no_ext}.png"))
+
         # Calculate YUV Metrics
         gt_yuv = rgb_to_yuv(gt)
         rec_yuv = rgb_to_yuv(rec)

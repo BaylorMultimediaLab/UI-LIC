@@ -49,7 +49,7 @@ class ComparisonCanvas(tk.Canvas):
 
     def set_images(self, path1, path2=None, overlay_path1=None, overlay_path2=None, 
                    label1="Right", label2="Left", metrics1="", metrics2="", 
-                   show_metrics=True, invert_overlay=True):
+                   show_metrics=True, invert_overlay=True, overlay_mode="error"):
         """
         path1: Right Image
         path2: Left Image
@@ -69,14 +69,24 @@ class ComparisonCanvas(tk.Canvas):
             img = Image.open(img_path).convert("RGB")
             if not map_path or not os.path.exists(map_path):
                 return img
-                
+
+            import numpy as np
+            img_np = np.array(img).astype(np.float32)
+
+            if overlay_mode == "gradient":
+                grad_map = Image.open(map_path).convert("RGB")
+                if grad_map.size != img.size:
+                    grad_map = grad_map.resize(img.size, Image.LANCZOS)
+                grad_np = np.array(grad_map).astype(np.float32)
+                alpha = (grad_np[:, :, 2] / 255.0) * 0.8
+                alpha_3d = np.expand_dims(alpha, axis=2)
+                blended = img_np * (1.0 - alpha_3d) + grad_np * alpha_3d
+                return Image.fromarray(blended.astype(np.uint8))
+
             # Perform Blending
             error_map = Image.open(map_path).convert("L")
             if error_map.size != img.size:
                 error_map = error_map.resize(img.size, Image.LANCZOS)
-                
-            import numpy as np
-            img_np = np.array(img).astype(np.float32)
             map_np = np.array(error_map).astype(np.float32) / 255.0
             
             # alpha scaling: 0.8 represents greatest error
@@ -434,7 +444,7 @@ class LICApp:
 
         ttk.Label(comp_controls, text="Show Error:", font=self.F_BTN).pack(side=tk.LEFT, padx=(10, 5))
         self.error_type_var = tk.StringVar(value="None")
-        self.error_selector = ttk.Combobox(comp_controls, state="readonly", width=8, textvariable=self.error_type_var, values=["None", "PSNR", "SSIM"], font=self.F_BASE)
+        self.error_selector = ttk.Combobox(comp_controls, state="readonly", width=8, textvariable=self.error_type_var, values=["None", "PSNR", "SSIM", "Gradient"], font=self.F_BASE)
         self.error_selector.pack(side=tk.LEFT)
         self.error_selector.bind("<<ComboboxSelected>>", self.toggle_error_options)
 
@@ -1374,12 +1384,14 @@ class LICApp:
         
         show_error = (error_type != "None")
         invert_overlay = (error_type == "SSIM")
+        overlay_mode = "gradient" if error_type == "Gradient" else "error"
         
         # Determine base paths and overlay paths
         subfolder = "reconstruction"
         if show_error:
             if error_type == "PSNR": subfolder = "psnr_map"
             elif error_type == "SSIM": subfolder = "ssim_map"
+            elif error_type == "Gradient": subfolder = "grad_map"
 
         if show_error and use_overlay:
             # Base is reconstruction, overlay is the error map
@@ -1408,7 +1420,8 @@ class LICApp:
             label1=model_right, label2=model_left,
             metrics1=metrics_right, metrics2=metrics_left,
             show_metrics=show_m,
-            invert_overlay=invert_overlay
+            invert_overlay=invert_overlay,
+            overlay_mode=overlay_mode
         )
 
         log_msg = f"[Viewer] Comparing: {model_left} vs {model_right} ({selected_img})"

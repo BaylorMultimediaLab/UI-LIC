@@ -1,4 +1,4 @@
-# Unified Interface For Learned Image Compression (LIC)
+# Unified Interface For Learned Image Compression (UI-LIC)
 
 This repository provides a unified framework for managing, training, and testing multiple state-of-the-art Learned Image Compression (LIC) models through a single, consistent interface. It simplifies the complex setup and execution requirements of various research models into a streamlined workflow.
 

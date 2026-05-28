@@ -1504,10 +1504,10 @@ class LICApp:
         for item in data.get("per_image_metrics", []):
             self.metrics_tree.insert("", tk.END, values=(
                 item.get("image_name"),
+                item.get("bpp"),
                 item.get("psnr"),
                 item.get("ssim"),
                 item.get("lpips"),
-                item.get("bpp"),
                 item.get("vmaf")
             ))
         

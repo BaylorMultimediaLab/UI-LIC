@@ -891,7 +891,7 @@ class LICApp:
         # Toggle equalize visibility
         standard_codecs = ["AVC", "HEVC", "AV1"]
         selected_standards = [m for m in self.selected_model_names if m in standard_codecs]
-        if len(selected_standards) >= 2:
+        if len(selected_standards) >= 1:
             self.equalize_check.pack(side=tk.TOP, pady=5)
         else:
             self.equalize_check.pack_forget()
@@ -1075,7 +1075,7 @@ class LICApp:
         standard_codecs = ["AVC", "HEVC", "AV1"]
         selected_standards = [m for m in self.selected_model_names if m in standard_codecs]
         learning_models = [m for m in self.selected_model_names if m not in standard_codecs]
-        equalize_enabled = self.equalize_var.get() and len(selected_standards) >= 2
+        equalize_enabled = self.equalize_var.get() and len(selected_standards) >= 1
         tasks = {}
         eval_tasks = []
         standard_equalize_config = None
@@ -1132,18 +1132,24 @@ class LICApp:
                 "input_dir": gt_dir
             })
 
-            if model_name in standard_codecs and equalize_enabled:
-                if standard_equalize_config is None:
-                    standard_equalize_config = {
-                        "codec_list": ",".join(selected_standards),
-                        "qp": final_args.get("qp"),
-                        "use_gpu": final_args.get("use_gpu"),
-                        "input_dir": gt_dir,
-                        "save_dir": model_out,
-                        "workdir": os.path.join(ROOT_DIR, config["workdir"].get()),
-                        "env_path": model_env if model_env and os.path.exists(model_env) else None
-                    }
-                    standard_use_gpu = final_args.get("use_gpu")
+        if equalize_enabled:
+             # Just use the first standard codec's config for environment/workdir, as they share it
+             first_std = selected_standards[0]
+             std_config = self.model_configs[first_std]
+             # Rederive env just for the standard config
+             user_std_env = std_config["env"].get().strip()
+             std_env = os.path.abspath(os.path.expanduser(user_std_env)) if user_std_env else find_env(f"{first_std}-env")
+             
+             standard_equalize_config = {
+                "codec_list": ",".join(selected_standards),
+                "qp": std_config["args"].get("qp").get() if "qp" in std_config["args"] else 23,
+                "use_gpu": std_config["args"].get("use_gpu").get() if "use_gpu" in std_config["args"] else False,
+                "input_dir": gt_dir,
+                "save_dir": os.path.abspath(os.path.join(output_base, first_std)), # Use the save_dir of the first one
+                "workdir": os.path.join(ROOT_DIR, std_config["workdir"].get()),
+                "env_path": std_env if std_env and os.path.exists(std_env) else None
+             }
+
 
         # Prepare tasks for external folders
         import shutil
@@ -1222,8 +1228,11 @@ class LICApp:
             target_map = {}
             for model_name in learning_models:
                 metrics_path = os.path.join(output_base, model_name, f"{model_name}_metrics.json")
+                self.log(f"[DEBUG] Looking for metrics at: {metrics_path}\n")
                 if not os.path.exists(metrics_path):
-                    self.log(f"[GUI] Warning: Metrics not found for {model_name}; skipping as target source.\n")
+                    self.log(f"[GUI] Warning: Metrics not found at {metrics_path} for {model_name}; skipping.\n")
+                    if os.path.exists(os.path.join(output_base, model_name)):
+                        self.log(f"[DEBUG] Directory {os.path.join(output_base, model_name)} contains: {os.listdir(os.path.join(output_base, model_name))}\n")
                     continue
                 try:
                     with open(metrics_path, "r") as f:

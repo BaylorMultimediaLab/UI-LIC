@@ -14,7 +14,7 @@ class DCVCRTImageTestInterface(BaseInterface):
     DEFAULT_VARS = {
         "model_path": None,
         "input": None,
-        "qp": 27,
+        "qp": 47,
         "device": "cuda",
         "save_dir": None
     }

@@ -717,7 +717,7 @@ class LICApp:
         table_frame = ttk.Frame(self.model_details_tab)
         table_frame.pack(fill=tk.BOTH, expand=True)
 
-        columns = ("image", "psnr", "ssim", "lpips", "bpp", "vmaf")
+        columns = ("image", "bpp", "psnr", "ssim", "lpips", "vmaf")
         self.metrics_tree = ttk.Treeview(table_frame, columns=columns, show="headings")
 
         for col in columns:
@@ -737,15 +737,15 @@ class LICApp:
         summary_table_frame = ttk.Frame(self.overall_summary_tab)
         summary_table_frame.pack(fill=tk.BOTH, expand=True)
 
-        sum_cols = ("model", "avg_psnr", "avg_ssim", "avg_lpips", "avg_bpp", "avg_vmaf", "best_img", "best_psnr", "worst_img", "worst_psnr", "time")
+        sum_cols = ("model", "avg_bpp", "avg_psnr", "avg_ssim", "avg_lpips", "avg_vmaf", "best_img", "best_psnr", "worst_img", "worst_psnr", "time")
         self.summary_tree = ttk.Treeview(summary_table_frame, columns=sum_cols, show="headings")
 
         sum_col_widths = {
             "model": 120, 
+            "avg_bpp": 80, 
             "avg_psnr": 100, 
             "avg_ssim": 100,
             "avg_lpips": 100,
-            "avg_bpp": 80, 
             "avg_vmaf": 90, 
             "best_img": 150, 
             "best_psnr": 100, 
@@ -1473,10 +1473,10 @@ class LICApp:
 
             self.summary_tree.insert("", tk.END, values=(
                 model_name,
+                avg.get("bpp"),
                 avg.get("psnr"),
                 avg.get("ssim"),
                 avg.get("lpips"),
-                avg.get("bpp"),
                 avg.get("vmaf"),
                 best.get("image_name"),
                 best.get("psnr"),

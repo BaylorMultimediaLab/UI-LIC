@@ -194,9 +194,6 @@ def main():
         lpips_heatmap = lpips_error_maps.mean(dim=0)  # [1, H, W], or .sum(dim=0) for sum
         lpips_heatmap = lpips_heatmap.squeeze(0)      # [H, W]
         
-        #debug print shape of lpips_res
-        print(f"DEBUG: LPIPS layer outputs for {r_file}: {[res.shape for res in lpips_res]}")
-        
         # SSIM with Map (scikit-image)
         # Move to CPU/Numpy for skimage
         gt_np = gt.squeeze().permute(1, 2, 0).cpu().numpy()

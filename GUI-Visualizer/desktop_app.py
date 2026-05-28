@@ -464,7 +464,6 @@ class LICApp:
             selectbackground="#007acc"
         )
         self.external_listbox.pack(fill=tk.X, pady=(0, 10))
-        self.refresh_external_listbox()
         self.external_listbox.bind("<<ListboxSelect>>", self.on_model_select)
 
         self.run_btn = ttk.Button(self.sidebar, text="RUN EVALUATION", style='Run.TButton', command=self.run_evaluation)
@@ -561,6 +560,8 @@ class LICApp:
         self.log_area = tk.Text(self.sidebar, height=8, font=self.F_LOG, bg="#ffffff", fg="#333333", highlightthickness=1, highlightbackground="#cccccc")
         self.log_area.pack(fill=tk.BOTH, expand=True, pady=(20, 0))
         self.log_area.bind("<Key>", self.block_input)
+        
+        self.refresh_external_listbox()
 
     def on_main_tab_changed(self, event=None):
         current_tab = self.main_area.tab(self.main_area.select(), "text")
@@ -736,10 +737,22 @@ class LICApp:
         summary_table_frame = ttk.Frame(self.overall_summary_tab)
         summary_table_frame.pack(fill=tk.BOTH, expand=True)
 
-        sum_cols = ("model", "avg_psnr", "avg_bpp", "avg_vmaf", "best_img", "best_psnr", "worst_img", "worst_psnr", "time")
+        sum_cols = ("model", "avg_psnr", "avg_ssim", "avg_lpips", "avg_bpp", "avg_vmaf", "best_img", "best_psnr", "worst_img", "worst_psnr", "time")
         self.summary_tree = ttk.Treeview(summary_table_frame, columns=sum_cols, show="headings")
-        
-        sum_col_widths = {"model": 120, "avg_psnr": 100, "avg_bpp": 80, "avg_vmaf": 90, "best_img": 150, "best_psnr": 100, "worst_img": 150, "worst_psnr": 100, "time": 100}
+
+        sum_col_widths = {
+            "model": 120, 
+            "avg_psnr": 100, 
+            "avg_ssim": 100,
+            "avg_lpips": 100,
+            "avg_bpp": 80, 
+            "avg_vmaf": 90, 
+            "best_img": 150, 
+            "best_psnr": 100, 
+            "worst_img": 150, 
+            "worst_psnr": 100, 
+            "time": 100
+        }
         for col in sum_cols:
             self.summary_tree.heading(col, text=col.replace("_", " ").upper())
             self.summary_tree.column(col, anchor="center", width=sum_col_widths.get(col, 100))
@@ -891,6 +904,7 @@ class LICApp:
 
         self.sync_standard_qps()
         self.update_comparison()
+        self.refresh_summary_report()
 
     def build_external_config_ui(self, name):
         frame = ttk.LabelFrame(self.config_scrollable_frame, text=f"External: {name}", padding=15)
@@ -1433,25 +1447,35 @@ class LICApp:
             self.refresh_metrics_display()
 
     def refresh_summary_report(self):
+        if not hasattr(self, 'summary_tree'):
+            return
+            
         for item in self.summary_tree.get_children():
             self.summary_tree.delete(item)
-            
+
+        selected_all = self.selected_model_names + getattr(self, 'selected_external_names', [])
+
         for model_name, data in self.metrics_data.items():
+            if model_name not in selected_all:
+                continue
+
             avg = data.get("averages", {})
             runtime = data.get("runtime_seconds", 0)
             per_img = data.get("per_image_metrics", [])
-            
+
             if not per_img: continue
-            
+
             # Find best/worst based on PSNR
             best = max(per_img, key=lambda x: x.get("psnr", 0))
             worst = min(per_img, key=lambda x: x.get("psnr", 0))
-            
+
             time_str = f"{runtime:.1f}s" if runtime < 60 else f"{runtime/60:.1f}m"
-            
+
             self.summary_tree.insert("", tk.END, values=(
                 model_name,
                 avg.get("psnr"),
+                avg.get("ssim"),
+                avg.get("lpips"),
                 avg.get("bpp"),
                 avg.get("vmaf"),
                 best.get("image_name"),
@@ -1460,7 +1484,6 @@ class LICApp:
                 worst.get("psnr"),
                 time_str
             ))
-
     def refresh_metrics_display(self, event=None):
         model_name = self.metrics_model_sel.get()
         if not model_name or model_name not in self.metrics_data:

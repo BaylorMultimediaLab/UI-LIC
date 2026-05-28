@@ -136,8 +136,12 @@ def main():
                 log(f"  -> [{base_name}] Anchor: {anchor_codec} at {target_bpp:.4f} bpp")
             
             for cname in selected_codecs:
-                if cname == anchor_codec: continue
-                log(f"  -> [{base_name}] Equalizing {cname}...")
+                # If we are already extremely close to target (e.g. this WAS the anchor and no lower target exists)
+                if abs(results[cname]["bpp"] - target_bpp) < 0.00001:
+                    log(f"  -> [{base_name}] {cname} already matches target bpp ({results[cname]['bpp']:.4f}).")
+                    continue
+                
+                log(f"  -> [{base_name}] Equalizing {cname} to target {target_bpp:.4f}...")
                 
                 # Search for best QP to match target_bpp
                 best_qp = results[cname]["qp"]

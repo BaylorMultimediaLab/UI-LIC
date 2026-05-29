@@ -54,6 +54,7 @@ def relaunch_under_eval_env(import_error):
 
 try:
     import tkinter as tk
+    import tkinter.font as tkfont
     from tkinter import ttk, filedialog, messagebox
     import threading
     import importlib.util
@@ -76,7 +77,7 @@ except Exception:
     pass
 
 class ComparisonCanvas(tk.Canvas):
-    def __init__(self, master, **kwargs):
+    def __init__(self, master, title_font=None, metrics_font=None, **kwargs):
         super().__init__(master, **kwargs)
         self.image1 = None # Right Image
         self.image2 = None # Left Image
@@ -90,9 +91,16 @@ class ComparisonCanvas(tk.Canvas):
         self.tk_image = None
         self.slider_pos = 0.5
 
+        self.F_CANVAS_TITLE = title_font if title_font is not None else tkfont.Font(family='sans-serif', size=24, weight='bold')
+        self.F_CANVAS_METRICS = metrics_font if metrics_font is not None else tkfont.Font(family='sans-serif', size=14, weight='bold')
+
         self.bind("<Configure>", self.on_resize)
         self.bind("<B1-Motion>", self.on_drag)
         self.bind("<Button-1>", self.on_drag)
+
+    def set_canvas_fonts(self, title_font, metrics_font):
+        self.F_CANVAS_TITLE = title_font
+        self.F_CANVAS_METRICS = metrics_font
 
     def set_images(self, path1, path2=None, overlay_path1=None, overlay_path2=None, 
                    label1="Right", label2="Left", metrics1="", metrics2="", 
@@ -614,7 +622,13 @@ class LICApp:
         self.ssim_overlay_var = tk.BooleanVar(value=True)
         self.ssim_overlay_check = ttk.Checkbutton(comp_controls, text="Overlay", variable=self.ssim_overlay_var, command=self.update_comparison)
         
-        self.comp_canvas = ComparisonCanvas(self.compare_tab, bg="#1e1e1e", highlightthickness=0)
+        self.comp_canvas = ComparisonCanvas(
+            self.compare_tab,
+            title_font=self.F_CANVAS_TITLE,
+            metrics_font=self.F_CANVAS_METRICS,
+            bg="#1e1e1e",
+            highlightthickness=0
+        )
         self.comp_canvas.pack(fill=tk.BOTH, expand=True)
 
         self.metrics_tab = ttk.Frame(self.main_area, padding=20)

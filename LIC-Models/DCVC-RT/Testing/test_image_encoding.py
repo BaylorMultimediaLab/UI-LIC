@@ -19,6 +19,7 @@ except ImportError:
 from src.models.image_model import DMCI
 from src.utils.common import get_state_dict
 from src.utils.metrics import calc_psnr, calc_msssim_rgb
+from src.utils.transforms import rgb2ycbcr, ycbcr2rgb
 from src.layers.cuda_inference import replicate_pad
 
 def parse_args():
@@ -69,13 +70,16 @@ def calculate_vmaf(orig_path, recon_img):
 def process_image(img_path, net, lpips_fn, args):
     """Processes a single image and returns the metrics."""
     img = Image.open(img_path).convert('RGB')
-    x = transforms.ToTensor()(img).unsqueeze(0).to(args.device)
+    x_rgb = transforms.ToTensor()(img).unsqueeze(0).to(args.device)
     
     # Get base filename (e.g., 'kodim01')
     base_name = os.path.splitext(os.path.basename(img_path))[0]
     
-    if args.device == "cuda":
-        x = x.to(torch.float16)
+    if args.device.startswith("cuda"):
+        x_rgb = x_rgb.to(torch.float16)
+
+    # DCVC-RT expects YCbCr for RGB inputs
+    x = rgb2ycbcr(x_rgb)
 
     pic_height, pic_width = x.shape[2], x.shape[3]
     padding_r, padding_b = DMCI.get_padding_size(pic_height, pic_width, 16)
@@ -84,6 +88,9 @@ def process_image(img_path, net, lpips_fn, args):
     # --- Compress ---
     with torch.no_grad():
         start = time.time()
+        use_two_entropy_coders = pic_height * pic_width > 1280 * 720
+        net.set_use_two_entropy_coders(use_two_entropy_coders)
+
         encoded = net.compress(x_padded, args.qp)
 
         # Save Bitstream as normalized name (e.g., kodim01.bin)
@@ -93,7 +100,7 @@ def process_image(img_path, net, lpips_fn, args):
 
         sps = {
             'sps_id': 0, 'height': pic_height, 'width': pic_width, 
-            'ec_part': 0, 'use_ada_i': 0
+            'ec_part': 1 if use_two_entropy_coders else 0, 'use_ada_i': 0
         }
 
         decoded = net.decompress(encoded["bit_stream"], sps, args.qp)        
@@ -102,17 +109,18 @@ def process_image(img_path, net, lpips_fn, args):
     # --- Unpad and Clamp ---
     recon = decoded['x_hat'][:, :, :pic_height, :pic_width]
     recon_clamped = torch.clamp(recon, 0, 1)
+    recon_rgb = ycbcr2rgb(recon_clamped)
     
     # --- Convert to PIL Image for Saving & VMAF ---
     to_pil = transforms.ToPILImage()
-    recon_img = to_pil(recon_clamped.squeeze(0).cpu().float())
+    recon_img = to_pil(recon_rgb.squeeze(0).cpu().float())
 
     # --- Metrics Calculation ---
     bpp = len(encoded['bit_stream']) * 8 / (pic_height * pic_width)
     inference_time = (end - start) * 1000
     
-    rgb_orig = (x.squeeze(0).cpu().float().numpy() * 255).round()
-    rgb_rec = (recon_clamped.squeeze(0).cpu().float().numpy() * 255).round()
+    rgb_orig = (x_rgb.squeeze(0).cpu().float().numpy() * 255).round()
+    rgb_rec = (recon_rgb.squeeze(0).cpu().float().numpy() * 255).round()
     
     psnr = calc_psnr(rgb_orig, rgb_rec)
     msssim = calc_msssim_rgb(rgb_orig, rgb_rec)
@@ -120,8 +128,8 @@ def process_image(img_path, net, lpips_fn, args):
     lpips_val = 0.0
     if lpips_fn is not None:
         with torch.no_grad():
-            x_lpips = x.float() * 2.0 - 1.0
-            recon_lpips = recon_clamped.float() * 2.0 - 1.0
+            x_lpips = x_rgb.float() * 2.0 - 1.0
+            recon_lpips = recon_rgb.float() * 2.0 - 1.0
             lpips_val = lpips_fn(x_lpips, recon_lpips).item()
 
     vmaf_val = calculate_vmaf(img_path, recon_img)
@@ -151,7 +159,7 @@ def main():
     net.eval()
     net.update()
     
-    if args.device == "cuda":
+    if args.device.startswith("cuda"):
         net.half()
 
     # Init LPIPS Model (AlexNet backend is standard for compression eval)

@@ -118,26 +118,34 @@ def main():
                 bpp = (os.path.getsize(bit_path) * 8) / (w * h)
                 results[cname] = {"bpp": bpp, "qp": args.qp, "bit_path": bit_path, "rec_path": rec_path}
             
-        if args.equalize and len(results) > 1:
+        if args.equalize and len(results) >= 1:
             # Stage 2: Equalization
-            # "The codec with the lowest resulting bpp is selected as the anchor."
+            # Determine target bpp from learning-based models if available.
+            # If not available, fall back to the most efficient standard codec as anchor.
+            
+            learning_target = target_bpp_map.get(base_name)
+            
             anchor_codec = min(results, key=lambda k: results[k]["bpp"])
             standard_anchor_bpp = results[anchor_codec]["bpp"]
-            target_bpp = standard_anchor_bpp
-
-            learning_target = target_bpp_map.get(base_name)
+            
             if isinstance(learning_target, (int, float)) and learning_target > 0:
-                target_bpp = min(target_bpp, learning_target)
+                # Requirement: The lowest BPP of learned codecs is the target rate.
+                target_bpp = learning_target
                 log(
-                    f"  -> [{base_name}] Anchor: {anchor_codec} at {standard_anchor_bpp:.4f} bpp | "
-                    f"Learning target: {learning_target:.4f} bpp"
+                    f"  -> [{base_name}] Anchor: Learned codec at {target_bpp:.4f} bpp | "
+                    f"Standard (for reference): {anchor_codec} at {standard_anchor_bpp:.4f} bpp"
                 )
             else:
+                target_bpp = standard_anchor_bpp
                 log(f"  -> [{base_name}] Anchor: {anchor_codec} at {target_bpp:.4f} bpp")
             
             for cname in selected_codecs:
-                if cname == anchor_codec: continue
-                log(f"  -> [{base_name}] Equalizing {cname}...")
+                # If we are already extremely close to target (e.g. this WAS the anchor and no lower target exists)
+                if abs(results[cname]["bpp"] - target_bpp) < 0.00001:
+                    log(f"  -> [{base_name}] {cname} already matches target bpp ({results[cname]['bpp']:.4f}).")
+                    continue
+                
+                log(f"  -> [{base_name}] Equalizing {cname} to target {target_bpp:.4f}...")
                 
                 # Search for best QP to match target_bpp
                 best_qp = results[cname]["qp"]

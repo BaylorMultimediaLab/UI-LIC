@@ -45,7 +45,12 @@ WEIGHTS_DATA = {
         "base_path": "LIC-Models/ELIC/weights/",
         "description": "Official ELIC pretrained model.",
         "options": [
-            {"name": "elic_official.pth", "id": "1jUfYJdZd0-bYUsoOUWwEpI5t1MZYP3AP", "dest_name": "elic.pth", "desc": "Official ELIC model"},
+            {"name": "ELIC_0450_ft_3980_Plateau.pth.tar", "id": "1jUfYJdZd0-1uuKQJiozcBfgGMJ8CfM6lrXOZWv6RUDN",  "desc": "lambda 0.45 (Highest quality)"},
+            {"name": "ELIC_0150_ft_3980_Plateau.pth.tar", "id": "1s544Uxv0gBY3WvKBcGNb3Fb22zfmd9PL",  "desc": "lambda 0.15"},
+            {"name": "ELIC_0032_ft_3980_Plateau.pth.tar", "id": "1Moody9IR8CuAGwLCZ_ZMTfZXT0ehQhqc",  "desc": "lambda 0.032"},
+            {"name": "ELIC_0016_ft_3980_Plateau.pth.tar", "id": "1MWlYAmpHbWlGtG7MBBTPEew800grY5yC",  "desc": "lambda 0.016"},
+            {"name": "ELIC_0008_ft_3980_Plateau.pth.tar", "id": "1VNE7rx-rBFLnNFkz56Zc-cPr6xrBBJdL",  "desc": "lambda 0.008"},
+            {"name": "ELIC_0004_ft_3980_Plateau.pth.tar", "id": "1YGVJ9bpeEq0xfqka2xkaMzhDkeYFJi6q",  "desc": "lambda 0.004 (Highest compression)"},
         ]
     },
     "RwkvCompress": {

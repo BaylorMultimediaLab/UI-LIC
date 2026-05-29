@@ -464,7 +464,6 @@ class LICApp:
             selectbackground="#007acc"
         )
         self.external_listbox.pack(fill=tk.X, pady=(0, 10))
-        self.refresh_external_listbox()
         self.external_listbox.bind("<<ListboxSelect>>", self.on_model_select)
 
         self.run_btn = ttk.Button(self.sidebar, text="RUN EVALUATION", style='Run.TButton', command=self.run_evaluation)
@@ -561,6 +560,125 @@ class LICApp:
         self.log_area = tk.Text(self.sidebar, height=8, font=self.F_LOG, bg="#ffffff", fg="#333333", highlightthickness=1, highlightbackground="#cccccc")
         self.log_area.pack(fill=tk.BOTH, expand=True, pady=(20, 0))
         self.log_area.bind("<Key>", self.block_input)
+        
+        self.refresh_external_listbox()
+
+    def on_main_tab_changed(self, event=None):
+        current_tab = self.main_area.tab(self.main_area.select(), "text")
+        if current_tab == "Visual Comparison":
+            self.load_metrics()
+            self.refresh_image_list()
+            self.update_comparison()
+        elif current_tab == "Metrics Report":
+            self.load_metrics()
+            self.refresh_metrics_display()
+
+    def on_equalize_toggle(self):
+        self.on_model_select() # Refresh UI to show/hide synchronized QPs
+
+    def sync_qp(self, source_var, *args):
+        if not self.equalize_var.get(): return
+        try:
+            new_val = source_var.get()
+        except:
+            return
+        standard_codecs = ["AVC", "HEVC", "AV1"]
+        for mname in self.selected_model_names:
+            if mname in standard_codecs:
+                qp_var = self.model_configs[mname]["args"].get("qp")
+                if qp_var and qp_var.get() != new_val:
+                    qp_var.set(new_val)
+
+    def sync_standard_qps(self):
+        if not self.equalize_var.get():
+            return
+        standard_codecs = ["AVC", "HEVC", "AV1"]
+        first_qp_var = None
+        for mname in self.selected_model_names:
+            if mname in standard_codecs:
+                qp_var = self.model_configs.get(mname, {}).get("args", {}).get("qp")
+                if qp_var:
+                    if first_qp_var is None:
+                        first_qp_var = qp_var
+                    elif qp_var.get() != first_qp_var.get():
+                        qp_var.set(first_qp_var.get())
+
+    def _find_largest_weight(self, weights_dir):
+        if not os.path.isdir(weights_dir):
+            return None
+        candidates = []
+        for root, _, files in os.walk(weights_dir):
+            for fname in files:
+                if fname.endswith((".pth", ".pth.tar", ".pkl", ".pt")):
+                    candidates.append(os.path.join(root, fname))
+        if not candidates:
+            return None
+        return max(candidates, key=lambda p: os.path.getsize(p))
+
+    def _find_checkpoint_weight(self, workdir):
+        search_dirs = [
+            os.path.join(workdir, "checkpoints"),
+            os.path.join(ROOT_DIR, "checkpoints")
+        ]
+        found_files = []
+        for sd in search_dirs:
+            if os.path.exists(sd):
+                for ext in ["*.pth", "*.pth.tar", "*.pkl", "*.pt"]:
+                    for depth in range(4):
+                        wildcards = ["*"] * depth
+                        pattern = os.path.join(sd, *wildcards, ext)
+                        found_files.extend(glob.glob(pattern))
+        if not found_files:
+            return None
+        best_files = [f for f in found_files if 'best' in os.path.basename(f).lower()]
+        if best_files:
+            best_files.sort(key=os.path.getmtime, reverse=True)
+            return best_files[0]
+        found_files.sort(key=os.path.getmtime, reverse=True)
+        return found_files[0]
+
+    def _apply_weight_autofill(self, model_name, force=False):
+        config = self.model_configs.get(model_name)
+        if not config:
+            return
+        use_pretrained_var = config.get("use_pretrained")
+        if use_pretrained_var is None:
+            return
+
+        workdir = os.path.join(ROOT_DIR, config["workdir"].get())
+        weights_dir = os.path.join(workdir, "weights")
+        weight_path = self._find_largest_weight(weights_dir) if use_pretrained_var.get() else None
+        if weight_path is None:
+            weight_path = self._find_checkpoint_weight(workdir)
+
+        for arg_name, var in config["args"].items():
+            arg_lower = arg_name.lower()
+            is_weight_arg = any(k in arg_lower for k in ["checkpoint", "model_path", "codec_path", "weights", "weight"])
+            if not is_weight_arg:
+                continue
+            if any(k in arg_lower for k in ["sd_path", "elic_path"]):
+                continue
+            if not force and var.get() not in ("", None, "None"):
+                continue
+            if weight_path:
+                var.set(weight_path)
+
+    def on_use_pretrained_toggle(self, model_name):
+        self._apply_weight_autofill(model_name, force=True)
+
+    def toggle_error_options(self, event=None):
+        error_type = self.error_type_var.get()
+        if error_type != "None":
+            self.ssim_overlay_check.pack(side=tk.LEFT, padx=15)
+        else:
+            self.ssim_overlay_check.pack_forget()
+
+        if error_type == "LPIPS":
+            self.lpips_layers_frame.pack(side=tk.LEFT, padx=15)
+        else:
+            self.lpips_layers_frame.pack_forget()
+
+        self.update_comparison()
 
     def on_main_tab_changed(self, event=None):
         current_tab = self.main_area.tab(self.main_area.select(), "text")
@@ -716,7 +834,7 @@ class LICApp:
         table_frame = ttk.Frame(self.model_details_tab)
         table_frame.pack(fill=tk.BOTH, expand=True)
 
-        columns = ("image", "psnr", "ssim", "lpips", "bpp", "vmaf")
+        columns = ("image", "bpp", "psnr", "ssim", "lpips", "vmaf")
         self.metrics_tree = ttk.Treeview(table_frame, columns=columns, show="headings")
 
         for col in columns:
@@ -736,10 +854,22 @@ class LICApp:
         summary_table_frame = ttk.Frame(self.overall_summary_tab)
         summary_table_frame.pack(fill=tk.BOTH, expand=True)
 
-        sum_cols = ("model", "avg_psnr", "avg_bpp", "avg_vmaf", "best_img", "best_psnr", "worst_img", "worst_psnr", "time")
+        sum_cols = ("model", "avg_bpp", "avg_psnr", "avg_ssim", "avg_lpips", "avg_vmaf", "best_img", "best_psnr", "worst_img", "worst_psnr", "time")
         self.summary_tree = ttk.Treeview(summary_table_frame, columns=sum_cols, show="headings")
-        
-        sum_col_widths = {"model": 120, "avg_psnr": 100, "avg_bpp": 80, "avg_vmaf": 90, "best_img": 150, "best_psnr": 100, "worst_img": 150, "worst_psnr": 100, "time": 100}
+
+        sum_col_widths = {
+            "model": 120, 
+            "avg_bpp": 80, 
+            "avg_psnr": 100, 
+            "avg_ssim": 100,
+            "avg_lpips": 100,
+            "avg_vmaf": 90, 
+            "best_img": 150, 
+            "best_psnr": 100, 
+            "worst_img": 150, 
+            "worst_psnr": 100, 
+            "time": 100
+        }
         for col in sum_cols:
             self.summary_tree.heading(col, text=col.replace("_", " ").upper())
             self.summary_tree.column(col, anchor="center", width=sum_col_widths.get(col, 100))
@@ -878,7 +1008,7 @@ class LICApp:
         # Toggle equalize visibility
         standard_codecs = ["AVC", "HEVC", "AV1"]
         selected_standards = [m for m in self.selected_model_names if m in standard_codecs]
-        if len(selected_standards) >= 2:
+        if len(selected_standards) >= 1:
             self.equalize_check.pack(side=tk.TOP, pady=5)
         else:
             self.equalize_check.pack_forget()
@@ -891,6 +1021,7 @@ class LICApp:
 
         self.sync_standard_qps()
         self.update_comparison()
+        self.refresh_summary_report()
 
     def build_external_config_ui(self, name):
         frame = ttk.LabelFrame(self.config_scrollable_frame, text=f"External: {name}", padding=15)
@@ -1061,7 +1192,7 @@ class LICApp:
         standard_codecs = ["AVC", "HEVC", "AV1"]
         selected_standards = [m for m in self.selected_model_names if m in standard_codecs]
         learning_models = [m for m in self.selected_model_names if m not in standard_codecs]
-        equalize_enabled = self.equalize_var.get() and len(selected_standards) >= 2
+        equalize_enabled = self.equalize_var.get() and len(selected_standards) >= 1
         tasks = {}
         eval_tasks = []
         standard_equalize_config = None
@@ -1118,18 +1249,24 @@ class LICApp:
                 "input_dir": gt_dir
             })
 
-            if model_name in standard_codecs and equalize_enabled:
-                if standard_equalize_config is None:
-                    standard_equalize_config = {
-                        "codec_list": ",".join(selected_standards),
-                        "qp": final_args.get("qp"),
-                        "use_gpu": final_args.get("use_gpu"),
-                        "input_dir": gt_dir,
-                        "save_dir": model_out,
-                        "workdir": os.path.join(ROOT_DIR, config["workdir"].get()),
-                        "env_path": model_env if model_env and os.path.exists(model_env) else None
-                    }
-                    standard_use_gpu = final_args.get("use_gpu")
+        if equalize_enabled:
+             # Just use the first standard codec's config for environment/workdir, as they share it
+             first_std = selected_standards[0]
+             std_config = self.model_configs[first_std]
+             # Rederive env just for the standard config
+             user_std_env = std_config["env"].get().strip()
+             std_env = os.path.abspath(os.path.expanduser(user_std_env)) if user_std_env else find_env(f"{first_std}-env")
+             
+             standard_equalize_config = {
+                "codec_list": ",".join(selected_standards),
+                "qp": std_config["args"].get("qp").get() if "qp" in std_config["args"] else 23,
+                "use_gpu": std_config["args"].get("use_gpu").get() if "use_gpu" in std_config["args"] else False,
+                "input_dir": gt_dir,
+                "save_dir": os.path.abspath(os.path.join(output_base, first_std)), # Use the save_dir of the first one
+                "workdir": os.path.join(ROOT_DIR, std_config["workdir"].get()),
+                "env_path": std_env if std_env and os.path.exists(std_env) else None
+             }
+
 
         # Prepare tasks for external folders
         import shutil
@@ -1208,8 +1345,11 @@ class LICApp:
             target_map = {}
             for model_name in learning_models:
                 metrics_path = os.path.join(output_base, model_name, f"{model_name}_metrics.json")
+                self.log(f"[DEBUG] Looking for metrics at: {metrics_path}\n")
                 if not os.path.exists(metrics_path):
-                    self.log(f"[GUI] Warning: Metrics not found for {model_name}; skipping as target source.\n")
+                    self.log(f"[GUI] Warning: Metrics not found at {metrics_path} for {model_name}; skipping.\n")
+                    if os.path.exists(os.path.join(output_base, model_name)):
+                        self.log(f"[DEBUG] Directory {os.path.join(output_base, model_name)} contains: {os.listdir(os.path.join(output_base, model_name))}\n")
                     continue
                 try:
                     with open(metrics_path, "r") as f:
@@ -1433,26 +1573,36 @@ class LICApp:
             self.refresh_metrics_display()
 
     def refresh_summary_report(self):
+        if not hasattr(self, 'summary_tree'):
+            return
+            
         for item in self.summary_tree.get_children():
             self.summary_tree.delete(item)
-            
+
+        selected_all = self.selected_model_names + getattr(self, 'selected_external_names', [])
+
         for model_name, data in self.metrics_data.items():
+            if model_name not in selected_all:
+                continue
+
             avg = data.get("averages", {})
             runtime = data.get("runtime_seconds", 0)
             per_img = data.get("per_image_metrics", [])
-            
+
             if not per_img: continue
-            
+
             # Find best/worst based on PSNR
             best = max(per_img, key=lambda x: x.get("psnr", 0))
             worst = min(per_img, key=lambda x: x.get("psnr", 0))
-            
+
             time_str = f"{runtime:.1f}s" if runtime < 60 else f"{runtime/60:.1f}m"
-            
+
             self.summary_tree.insert("", tk.END, values=(
                 model_name,
-                avg.get("psnr"),
                 avg.get("bpp"),
+                avg.get("psnr"),
+                avg.get("ssim"),
+                avg.get("lpips"),
                 avg.get("vmaf"),
                 best.get("image_name"),
                 best.get("psnr"),
@@ -1460,7 +1610,6 @@ class LICApp:
                 worst.get("psnr"),
                 time_str
             ))
-
     def refresh_metrics_display(self, event=None):
         model_name = self.metrics_model_sel.get()
         if not model_name or model_name not in self.metrics_data:
@@ -1481,10 +1630,10 @@ class LICApp:
         for item in data.get("per_image_metrics", []):
             self.metrics_tree.insert("", tk.END, values=(
                 item.get("image_name"),
+                item.get("bpp"),
                 item.get("psnr"),
                 item.get("ssim"),
                 item.get("lpips"),
-                item.get("bpp"),
                 item.get("vmaf")
             ))
         

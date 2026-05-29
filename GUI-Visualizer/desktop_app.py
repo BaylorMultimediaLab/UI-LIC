@@ -336,7 +336,7 @@ class LICApp:
         self.root.title("LIC Model Visualizer - Desktop")
         self.root.geometry("1600x1000") 
         
-        self.zoom_level = 1.0
+        self.zoom_level = self.get_default_zoom_level()
         self.update_font_scales()
         
         self.apply_styles()
@@ -354,6 +354,15 @@ class LICApp:
         self.load_metrics() # Added to load existing results on startup
         self.setup_bindings()
         self.poll_log_queue()
+
+    def get_default_zoom_level(self):
+        screen_height = self.root.winfo_screenheight()
+        if screen_height >= 2160:
+            return 1.0
+        if screen_height <= 1080:
+            return 0.6
+        ratio = (screen_height - 1080) / (2160 - 1080)
+        return 0.6 + 0.4 * ratio
 
     def update_font_scales(self):
         z = self.zoom_level

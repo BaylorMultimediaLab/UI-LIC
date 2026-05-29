@@ -4,43 +4,75 @@ This repository provides a unified framework for managing, training, and testing
 
 ---
 
+
+
 ## Core Workflow
 
-### 1. Environment Setup (`create-env.py` & `quick-start.py`)
-Each LIC model often requires a specific environment with distinct dependencies. 
+### 1. Environment Setup
+#### System Prerequisites
+Before setting up your virtual environments, ensure your system has the necessary external libraries and tools installed.
 
-- **Individual Setup (`create-env.py`):** Use this to create an environment for a single model with custom settings.
-  ```bash
-  python create-env.py
-  ```
+##### Docker (Required for VMAF)
+The evaluation pipeline uses **Docker** to calculate the **VMAF** (Video Multi-Method Assessment Fusion) metric. This ensures that a correctly compiled version of FFmpeg with `libvmaf` is available regardless of your host OS configuration.
+- **Requirement:** Docker Desktop (Mac/Windows) or Docker Engine (Linux) must be installed and running.
+- **Implementation:** The system uses the `mwader/static-ffmpeg` image. Local images are dynamically mounted into the container as read-only volumes for comparison, avoiding the need for a complex local FFmpeg installation.
+
+##### OS-Level Dependencies
+For standard frame manipulation and other video-based tasks, the `ffmpeg` binary is still recommended on your host system:
+
+```bash
+# For Ubuntu/Debian based systems
+sudo apt-get update
+sudo apt-get install ffmpeg
+```
+#### Environment setup
+Each LIC model often requires a specific environment with distinct dependencies. 
 - **Batch Setup (`quick-start.py`, recommended!) :** Use this to automatically create environments and download weights for ALL integrated models at once.
   ```bash
-  python quick-start.py [optional base_path]
+  python quick-start.py
   ```
   **Features:**
   - **Interactive Selection:** Choose specifically which models to set up and which pretrained weights to download.
   - **Quality/Lambda Selection:** For models like StableCodec or HPCM, you can select specific quality levels to save bandwidth and disk space.
   - **Confirmation Summary:** Review a full plan (including checks for previously installed environments or weights) before any changes are made.
   - **Automatic Dependency Mapping:** Uses the recommended Python versions and requirements files defined for each model automatically.
+- **Individual Setup (`create-env.py`):** Use this to create an environment for a single model with custom settings.
+  ```bash
+  python create-env.py
+  ```
 
----
-
-## Qualities & Weights Explanation
+#### Qualities & Weights Explanation
 
 Different models use different scales for their pretrained weights. Generally:
 - **Lambda (λ):** A higher λ value means the model is optimized for higher quality (and higher bitrate), while a lower λ means higher compression (and lower quality).
 - **Metric:** Models are typically optimized for either **MSE** (standard PSNR-focused) or **MS-SSIM** (perceptual-focused).
 
-### Model-Specific Scales:
+##### Model-Specific Scales:
 - **StableCodec:** Uses `ft` (finetuned) numbers. Higher numbers (e.g., `ft32`) target extreme compression (~0.005 bpp), while lower numbers (e.g., `ft2`) provide higher quality (~0.035 bpp).
 - **RwkvCompress (LALIC):** Uses quality levels `q1` to `q6`. `q1` is the highest compression (lowest bitrate), and `q6` is the highest quality.
 - **HPCM:** Provides **Base** and **Large** versions. Each has 6 quality levels for both MSE and MS-SSIM metrics.
 - **LIC-TCM:** Provides `N=128` (Large) and `N=64` (Small) variants. The quality ranges from λ=0.0025 (highest compression) to λ=0.05 (highest quality).
 
 ---
+### 2. GUI Evaluation (inference and analysis)
+Launch the GUI app with `python ./GUI-Visualizer/desktop_app.py`.
 
-### 2. Configuration Generation (`configure-jobs.py`)
-Instead of manually editing JSON files, use `configure-jobs.py` to interactively build your job queue.
+From the start page, you can select the inference dataset directory, enable/disable codecs for inference and analyis, tune codec-specific settings, and launch the evaluation pipeline.
+<img width="2644" height="1433" alt="image" src="https://github.com/user-attachments/assets/4da8d15a-1be4-478b-aff9-f2f35a55e1b4" />
+
+After inference has been performed, on the "Visual Comparison" tab you can compare two image reconstructions side by side. The vertical blue line is a slider to adjust the viewport of the two images. The quality metrics may be toggled, and a number of error overlay maps be visualized. For example, this image shows the LPIPS feature maps, conveying the areas of greatest perceptual error.
+
+<img width="3276" height="1531" alt="image" src="https://github.com/user-attachments/assets/68625281-425a-41f5-a405-086042620818" />
+
+On the "Metrics Report" tab, you can view all the quantitative metrics for each codec and input image individually, or you can view the mean results of each codec.
+
+<img width="2644" height="1433" alt="image" src="https://github.com/user-attachments/assets/c80d3634-e42f-4aff-aac4-5b8ee423c515" />
+
+
+
+---
+### 3. CLI Configuration Generation (`configure-jobs.py`)
+Instead of manually editing JSON files, use `configure-jobs.py` to interactively build your queue for CLI-based training and inference jobs.
 
 **What it does:**
 - Scans `Interfaces/` to find all registered models (e.g., StableCodec, ELIC).
@@ -60,7 +92,7 @@ python configure-jobs.py
 # --output      : Specify custom output filename (default: arguments.json)
 ```
 
-### 3. Running the Dispatcher (`dispatcher.py`)
+### 4. Running the Dispatcher (`dispatcher.py`)
 The `dispatcher.py` script is the execution engine that processes the `arguments.json` queue.
 
 **What it does:**
@@ -97,25 +129,6 @@ The dispatcher automatically hands off results to `evaluation.py`. This script h
 
 **Enabling VMAF:**
 To enable VMAF, add `"use_vmaf": true` to the `evaluation` block in your `arguments.json`, or pass the `--use_vmaf` flag when running `evaluation.py` manually.
-
----
-
-## System Prerequisites
-Before setting up your virtual environments, ensure your system has the necessary external libraries and tools installed.
-
-### Docker (Required for VMAF)
-The evaluation pipeline uses **Docker** to calculate the **VMAF** (Video Multi-Method Assessment Fusion) metric. This ensures that a correctly compiled version of FFmpeg with `libvmaf` is available regardless of your host OS configuration.
-- **Requirement:** Docker Desktop (Mac/Windows) or Docker Engine (Linux) must be installed and running.
-- **Implementation:** The system uses the `mwader/static-ffmpeg` image. Local images are dynamically mounted into the container as read-only volumes for comparison, avoiding the need for a complex local FFmpeg installation.
-
-### OS-Level Dependencies
-For standard frame manipulation and other video-based tasks, the `ffmpeg` binary is still recommended on your host system:
-
-```bash
-# For Ubuntu/Debian based systems
-sudo apt-get update
-sudo apt-get install ffmpeg
-```
 
 ---
 

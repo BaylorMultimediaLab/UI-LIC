@@ -297,8 +297,8 @@ class ComparisonCanvas(tk.Canvas):
 
         self.create_image(offset_x, offset_y, anchor="nw", image=self.tk_image)
 
-        canvas_font = ("sans-serif", 24, "bold")
-        metrics_font = ("sans-serif", 14, "bold")
+        canvas_font = self.F_CANVAS_TITLE
+        metrics_font = self.F_CANVAS_METRICS
 
         if self.scaled_img1 and self.scaled_img2:
             line_x = offset_x + split_x
@@ -349,11 +349,30 @@ class LICApp:
 
     def update_font_scales(self):
         z = self.zoom_level
-        self.F_BASE = ("sans-serif", int(14 * z))
-        self.F_HEAD = ("sans-serif", int(18 * z), "bold")
-        self.F_BTN  = ("sans-serif", int(14 * z), "bold")
-        self.F_RUN  = ("sans-serif", int(20 * z), "bold")
-        self.F_LOG  = ("monospace", int(12 * z))
+        base_size = max(8, int(14 * z))
+        head_size = max(10, int(18 * z))
+        btn_size = max(8, int(14 * z))
+        run_size = max(10, int(20 * z))
+        log_size = max(8, int(12 * z))
+        canvas_title_size = max(10, int(24 * z))
+        canvas_metrics_size = max(8, int(14 * z))
+
+        if not hasattr(self, 'F_BASE'):
+            self.F_BASE = tkfont.Font(family='sans-serif', size=base_size)
+            self.F_HEAD = tkfont.Font(family='sans-serif', size=head_size, weight='bold')
+            self.F_BTN = tkfont.Font(family='sans-serif', size=btn_size, weight='bold')
+            self.F_RUN = tkfont.Font(family='sans-serif', size=run_size, weight='bold')
+            self.F_LOG = tkfont.Font(family='monospace', size=log_size)
+            self.F_CANVAS_TITLE = tkfont.Font(family='sans-serif', size=canvas_title_size, weight='bold')
+            self.F_CANVAS_METRICS = tkfont.Font(family='sans-serif', size=canvas_metrics_size, weight='bold')
+        else:
+            self.F_BASE.configure(size=base_size)
+            self.F_HEAD.configure(size=head_size)
+            self.F_BTN.configure(size=btn_size)
+            self.F_RUN.configure(size=run_size)
+            self.F_LOG.configure(size=log_size)
+            self.F_CANVAS_TITLE.configure(size=canvas_title_size)
+            self.F_CANVAS_METRICS.configure(size=canvas_metrics_size)
 
     def setup_bindings(self):
         self.root.bind("<Control-plus>", self.zoom_in)
@@ -401,7 +420,7 @@ class LICApp:
         style.configure('TCombobox', font=self.F_BASE)
 
         style.configure('TEntry', font=self.F_BASE, padding=4, fieldbackground='white')
-        style.configure('Treeview', font=self.F_BASE, rowheight=30)
+        style.configure('Treeview', font=self.F_BASE, rowheight=max(18, int(30 * self.zoom_level)))
         style.configure('Treeview.Heading', font=self.F_BTN)
 
     def _on_mousewheel(self, event):

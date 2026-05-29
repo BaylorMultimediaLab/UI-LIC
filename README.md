@@ -9,6 +9,8 @@ This repository provides a unified framework for managing, training, and testing
 ## Core Workflow
 
 ### 1. Environment Setup
+**Note:** This repository targets Linux-based systems, tested primarily on Ubuntu 24.04. If you run into issues on your operating system (especially with the automatic setup and GUI commands), please file an issue on our GitHub page.
+
 #### System Prerequisites
 Before setting up your virtual environments, ensure your system has the necessary external libraries and tools installed.
 

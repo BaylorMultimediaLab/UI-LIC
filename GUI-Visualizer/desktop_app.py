@@ -583,36 +583,41 @@ class LICApp:
         comp_controls = ttk.Frame(self.compare_tab)
         comp_controls.pack(fill=tk.X, pady=(0, 15))
 
-        ttk.Label(comp_controls, text="Image:", font=self.F_BTN).pack(side=tk.LEFT)
-        self.img_selector = ttk.Combobox(comp_controls, state="readonly", width=25, font=self.F_BASE)
-        self.img_selector.pack(side=tk.LEFT, padx=(5, 15))
+        comp_controls_top = ttk.Frame(comp_controls)
+        comp_controls_top.pack(fill=tk.X, pady=(0, 8))
+        comp_controls_bottom = ttk.Frame(comp_controls)
+        comp_controls_bottom.pack(fill=tk.X)
+
+        ttk.Label(comp_controls_top, text="Image:", font=self.F_BTN).pack(side=tk.LEFT)
+        self.img_selector = ttk.Combobox(comp_controls_top, state="readonly", width=30, font=self.F_BASE)
+        self.img_selector.pack(side=tk.LEFT, padx=(5, 15), fill=tk.X, expand=True)
         self.img_selector.bind("<<ComboboxSelected>>", self.update_comparison)
 
-        ttk.Label(comp_controls, text="Left Side:", font=self.F_BTN).pack(side=tk.LEFT)
-        self.model_selector_left = ttk.Combobox(comp_controls, state="readonly", width=15, font=self.F_BASE, values=["Ground Truth"])
+        ttk.Label(comp_controls_top, text="Left Side:", font=self.F_BTN).pack(side=tk.LEFT)
+        self.model_selector_left = ttk.Combobox(comp_controls_top, state="readonly", width=20, font=self.F_BASE, values=["Ground Truth"])
         self.model_selector_left.set("Ground Truth")
         self.model_selector_left.pack(side=tk.LEFT, padx=5)
         self.model_selector_left.bind("<<ComboboxSelected>>", self.update_comparison)
 
-        ttk.Label(comp_controls, text="Right Side:", font=self.F_BTN).pack(side=tk.LEFT)
-        self.model_selector_right = ttk.Combobox(comp_controls, state="readonly", width=15, font=self.F_BASE, values=["Ground Truth"])
+        ttk.Label(comp_controls_top, text="Right Side:", font=self.F_BTN).pack(side=tk.LEFT)
+        self.model_selector_right = ttk.Combobox(comp_controls_top, state="readonly", width=20, font=self.F_BASE, values=["Ground Truth"])
         self.model_selector_right.set("Ground Truth")
         self.model_selector_right.pack(side=tk.LEFT, padx=5)
         self.model_selector_right.bind("<<ComboboxSelected>>", self.update_comparison)
 
-        self.equalize_compare_check = ttk.Checkbutton(comp_controls, text="Equalize", variable=self.equalize_var, command=self.on_equalize_toggle)
+        self.equalize_compare_check = ttk.Checkbutton(comp_controls_bottom, text="Equalize", variable=self.equalize_var, command=self.on_equalize_toggle)
         # Initially hidden
-        
-        self.show_metrics_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(comp_controls, text="Show Metrics", variable=self.show_metrics_var, command=self.update_comparison).pack(side=tk.LEFT, padx=15)
 
-        ttk.Label(comp_controls, text="Show Error:", font=self.F_BTN).pack(side=tk.LEFT, padx=(10, 5))
+        self.show_metrics_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(comp_controls_bottom, text="Show Metrics", variable=self.show_metrics_var, command=self.update_comparison).pack(side=tk.LEFT, padx=(0, 15))
+
+        ttk.Label(comp_controls_bottom, text="Show Error:", font=self.F_BTN).pack(side=tk.LEFT, padx=(0, 5))
         self.error_type_var = tk.StringVar(value="None")
-        self.error_selector = ttk.Combobox(comp_controls, state="readonly", width=8, textvariable=self.error_type_var, values=["None", "PSNR", "SSIM", "LPIPS", "Gradient"], font=self.F_BASE)
-        self.error_selector.pack(side=tk.LEFT)
+        self.error_selector = ttk.Combobox(comp_controls_bottom, state="readonly", width=12, textvariable=self.error_type_var, values=["None", "PSNR", "SSIM", "LPIPS", "Gradient"], font=self.F_BASE)
+        self.error_selector.pack(side=tk.LEFT, padx=(0, 15))
         self.error_selector.bind("<<ComboboxSelected>>", self.toggle_error_options)
 
-        self.lpips_layers_frame = ttk.Frame(comp_controls)
+        self.lpips_layers_frame = ttk.Frame(comp_controls_bottom)
         layer_colors = ["Red", "Green", "Blue", "Yellow", "Purple"]
         for i in range(5):
             chk = ttk.Checkbutton(self.lpips_layers_frame, text=f"L{i}", 
@@ -620,8 +625,8 @@ class LICApp:
             chk.pack(side=tk.LEFT, padx=2)
 
         self.ssim_overlay_var = tk.BooleanVar(value=True)
-        self.ssim_overlay_check = ttk.Checkbutton(comp_controls, text="Overlay", variable=self.ssim_overlay_var, command=self.update_comparison)
-        
+        self.ssim_overlay_check = ttk.Checkbutton(comp_controls_bottom, text="Overlay", variable=self.ssim_overlay_var, command=self.update_comparison)
+
         self.comp_canvas = ComparisonCanvas(
             self.compare_tab,
             title_font=self.F_CANVAS_TITLE,

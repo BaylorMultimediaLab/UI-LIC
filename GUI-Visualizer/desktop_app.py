@@ -680,6 +680,123 @@ class LICApp:
 
         self.update_comparison()
 
+    def on_main_tab_changed(self, event=None):
+        current_tab = self.main_area.tab(self.main_area.select(), "text")
+        if current_tab == "Visual Comparison":
+            self.load_metrics()
+            self.refresh_image_list()
+            self.update_comparison()
+        elif current_tab == "Metrics Report":
+            self.load_metrics()
+            self.refresh_metrics_display()
+
+    def on_equalize_toggle(self):
+        self.on_model_select() # Refresh UI to show/hide synchronized QPs
+
+    def sync_qp(self, source_var, *args):
+        if not self.equalize_var.get(): return
+        try:
+            new_val = source_var.get()
+        except:
+            return
+        standard_codecs = ["AVC", "HEVC", "AV1"]
+        for mname in self.selected_model_names:
+            if mname in standard_codecs:
+                qp_var = self.model_configs[mname]["args"].get("qp")
+                if qp_var and qp_var.get() != new_val:
+                    qp_var.set(new_val)
+
+    def sync_standard_qps(self):
+        if not self.equalize_var.get():
+            return
+        standard_codecs = ["AVC", "HEVC", "AV1"]
+        first_qp_var = None
+        for mname in self.selected_model_names:
+            if mname in standard_codecs:
+                qp_var = self.model_configs.get(mname, {}).get("args", {}).get("qp")
+                if qp_var:
+                    if first_qp_var is None:
+                        first_qp_var = qp_var
+                    elif qp_var.get() != first_qp_var.get():
+                        qp_var.set(first_qp_var.get())
+
+    def _find_largest_weight(self, weights_dir):
+        if not os.path.isdir(weights_dir):
+            return None
+        candidates = []
+        for root, _, files in os.walk(weights_dir):
+            for fname in files:
+                if fname.endswith((".pth", ".pth.tar", ".pkl", ".pt")):
+                    candidates.append(os.path.join(root, fname))
+        if not candidates:
+            return None
+        return max(candidates, key=lambda p: os.path.getsize(p))
+
+    def _find_checkpoint_weight(self, workdir):
+        search_dirs = [
+            os.path.join(workdir, "checkpoints"),
+            os.path.join(ROOT_DIR, "checkpoints")
+        ]
+        found_files = []
+        for sd in search_dirs:
+            if os.path.exists(sd):
+                for ext in ["*.pth", "*.pth.tar", "*.pkl", "*.pt"]:
+                    for depth in range(4):
+                        wildcards = ["*"] * depth
+                        pattern = os.path.join(sd, *wildcards, ext)
+                        found_files.extend(glob.glob(pattern))
+        if not found_files:
+            return None
+        best_files = [f for f in found_files if 'best' in os.path.basename(f).lower()]
+        if best_files:
+            best_files.sort(key=os.path.getmtime, reverse=True)
+            return best_files[0]
+        found_files.sort(key=os.path.getmtime, reverse=True)
+        return found_files[0]
+
+    def _apply_weight_autofill(self, model_name, force=False):
+        config = self.model_configs.get(model_name)
+        if not config:
+            return
+        use_pretrained_var = config.get("use_pretrained")
+        if use_pretrained_var is None:
+            return
+
+        workdir = os.path.join(ROOT_DIR, config["workdir"].get())
+        weights_dir = os.path.join(workdir, "weights")
+        weight_path = self._find_largest_weight(weights_dir) if use_pretrained_var.get() else None
+        if weight_path is None:
+            weight_path = self._find_checkpoint_weight(workdir)
+
+        for arg_name, var in config["args"].items():
+            arg_lower = arg_name.lower()
+            is_weight_arg = any(k in arg_lower for k in ["checkpoint", "model_path", "codec_path", "weights", "weight"])
+            if not is_weight_arg:
+                continue
+            if any(k in arg_lower for k in ["sd_path", "elic_path"]):
+                continue
+            if not force and var.get() not in ("", None, "None"):
+                continue
+            if weight_path:
+                var.set(weight_path)
+
+    def on_use_pretrained_toggle(self, model_name):
+        self._apply_weight_autofill(model_name, force=True)
+
+    def toggle_error_options(self, event=None):
+        error_type = self.error_type_var.get()
+        if error_type != "None":
+            self.ssim_overlay_check.pack(side=tk.LEFT, padx=15)
+        else:
+            self.ssim_overlay_check.pack_forget()
+
+        if error_type == "LPIPS":
+            self.lpips_layers_frame.pack(side=tk.LEFT, padx=15)
+        else:
+            self.lpips_layers_frame.pack_forget()
+
+        self.update_comparison()
+
     def refresh_sidebar_and_models(self):
         """Toggle global path visibility and refresh model config views."""
         if self.show_advanced_var.get():

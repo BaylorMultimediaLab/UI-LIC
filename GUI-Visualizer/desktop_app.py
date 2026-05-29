@@ -1262,6 +1262,33 @@ class LICApp:
         if not gt_dir or not os.path.isdir(gt_dir):
             messagebox.showerror("Error", f"Valid GT directory required.\nCurrent path: {gt_dir}")
             return
+
+        base_env_dir = self.base_env_dir_var.get().strip()
+        missing_envs = []
+        for model_name in self.selected_model_names:
+            config = self.model_configs.get(model_name, {})
+            user_model_env = config.get("env", tk.StringVar(value="")).get().strip() if config else ""
+            if user_model_env:
+                model_env = os.path.abspath(os.path.expanduser(user_model_env))
+            else:
+                model_env = find_env(f"{model_name}-env", base_env_dir if base_env_dir else None)
+
+            if not model_env or not os.path.exists(model_env):
+                missing_envs.append(model_name)
+                continue
+
+            python_exec = get_python_for_env(model_env)
+            if not os.path.exists(python_exec):
+                missing_envs.append(model_name)
+
+        if missing_envs:
+            missing_list = "\n".join(f"- {name}" for name in missing_envs)
+            messagebox.showwarning(
+                "Missing Model Environments",
+                f"The following selected model environments are missing or incomplete:\n\n{missing_list}\n\nPlease run quick-start.py again to prepare the required virtual environments before running evaluation."
+            )
+            return
+
         self.run_btn.config(state=tk.DISABLED)
         self.progress.start()
         threading.Thread(target=self.execution_thread, args=(gt_dir,), daemon=True).start()

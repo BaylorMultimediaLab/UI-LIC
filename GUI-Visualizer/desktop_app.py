@@ -1264,8 +1264,12 @@ class LICApp:
             return
 
         base_env_dir = self.base_env_dir_var.get().strip()
+        standard_codecs = ["AVC", "HEVC", "AV1"]
         missing_envs = []
         for model_name in self.selected_model_names:
+            if model_name in standard_codecs:
+                continue
+
             config = self.model_configs.get(model_name, {})
             user_model_env = config.get("env", tk.StringVar(value="")).get().strip() if config else ""
             if user_model_env:

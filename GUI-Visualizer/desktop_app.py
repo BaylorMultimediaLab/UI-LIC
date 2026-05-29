@@ -1,33 +1,79 @@
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
 import os
 import sys
+import subprocess
 
 # Add parent directory to sys.path to allow importing from root
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
 
-import threading
-import importlib.util
-import inspect
-from PIL import Image, ImageTk
-import glob
-import builtins
-import queue
-import json
-import subprocess
-import time
-import numpy as np
-from dispatcher import Dispatcher
+
+def get_python_for_env(env_path):
+    if os.name == "nt" and os.path.isdir(os.path.join(env_path, "Scripts")):
+        return os.path.join(env_path, "Scripts", "python.exe")
+    return os.path.join(env_path, "bin", "python3")
+
+
+def find_env(name, base_env_dir=None):
+    if base_env_dir:
+        candidate = os.path.join(base_env_dir, name)
+        if os.path.exists(candidate):
+            return candidate
+
+    candidate = os.path.join(ROOT_DIR, "LIC-Models", name)
+    if os.path.exists(candidate):
+        return candidate
+
+    candidate = os.path.join(ROOT_DIR, name)
+    if os.path.exists(candidate):
+        return candidate
+
+    candidate = os.path.join(ROOT_DIR, "envs", name)
+    if os.path.exists(candidate):
+        return candidate
+
+    return None
+
+
+def relaunch_under_eval_env(import_error):
+    eval_env_path = find_env("eval-env")
+    if not eval_env_path or not os.path.exists(eval_env_path):
+        raise import_error
+
+    eval_python = get_python_for_env(eval_env_path)
+    if not os.path.exists(eval_python):
+        raise import_error
+
+    current_python = os.path.realpath(sys.executable)
+    target_python = os.path.realpath(eval_python)
+    if current_python == target_python:
+        raise import_error
+
+    print(f"[INFO] Required dependencies missing: {import_error}. Relaunching under eval-env Python: {eval_python}")
+    os.execv(eval_python, [eval_python] + sys.argv)
+
+try:
+    import tkinter as tk
+    from tkinter import ttk, filedialog, messagebox
+    import threading
+    import importlib.util
+    import inspect
+    from PIL import Image, ImageTk
+    import glob
+    import builtins
+    import queue
+    import json
+    import time
+    import numpy as np
+    from dispatcher import Dispatcher
+except ImportError as e:
+    relaunch_under_eval_env(e)
 
 try:
     from ctypes import windll
     windll.shcore.SetProcessDpiAwareness(1)
 except Exception:
     pass
-
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if ROOT_DIR not in sys.path:
-    sys.path.append(ROOT_DIR)
 
 class ComparisonCanvas(tk.Canvas):
     def __init__(self, master, **kwargs):

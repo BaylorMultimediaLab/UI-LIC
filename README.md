@@ -27,6 +27,9 @@ For standard frame manipulation and other video-based tasks, the `ffmpeg` binary
 sudo apt-get update
 sudo apt-get install ffmpeg
 ```
+
+Install and activate [Anaconda](https://www.anaconda.com/docs/getting-started/miniconda/main)
+
 #### Environment setup
 Each LIC model often requires a specific environment with distinct dependencies. 
 - **Batch Setup (`quick-start.py`, recommended!) :** Use this to automatically create environments and download weights for ALL integrated models at once.

@@ -552,7 +552,7 @@ class LICApp:
         self.progress.pack(fill=tk.X)
 
         self.main_area = ttk.Notebook(self.paned)
-        self.paned.add(self.main_area, weight=4)
+        self.paned.add(self.main_area, weight=2)
         self.main_area.bind("<<NotebookTabChanged>>", self.on_main_tab_changed)
 
         self.config_tab = ttk.Frame(self.main_area, padding=20)

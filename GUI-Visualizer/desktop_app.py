@@ -472,7 +472,11 @@ class LICApp:
         self.path_header = ttk.Label(self.sidebar, text="1. Path Settings", style='Header.TLabel')
         self.path_header.pack(anchor="w", pady=(0, 10))
 
-        self.gt_dir_var = tk.StringVar()
+        default_gt_dir = os.path.join(ROOT_DIR, "Kodak_dataset")
+        if os.path.exists(default_gt_dir):
+            self.gt_dir_var = tk.StringVar(value=default_gt_dir)
+        else:
+            self.gt_dir_var = tk.StringVar()
         self.gt_label = ttk.Label(self.sidebar, text="Input Images (Ground Truth):", font=self.F_BASE)
         self.gt_label.pack(anchor="w")
         self.gt_frame = ttk.Frame(self.sidebar)
@@ -517,6 +521,8 @@ class LICApp:
         for name in sorted(self.registry.keys()):
             self.model_listbox.insert(tk.END, name)
         self.model_listbox.pack(fill=tk.X, pady=(0, 15))
+        if self.registry:
+            self.model_listbox.select_set(0, tk.END)
         self.model_listbox.bind("<<ListboxSelect>>", self.on_model_select)
 
         # External Folders Section
@@ -647,6 +653,10 @@ class LICApp:
         self.log_area.pack(fill=tk.BOTH, expand=True, pady=(20, 0))
         self.log_area.bind("<Key>", self.block_input)
         
+        if self.registry:
+            self.main_area.select(self.compare_tab)
+            self.on_model_select()
+
         self.refresh_external_listbox()
 
     def on_main_tab_changed(self, event=None):

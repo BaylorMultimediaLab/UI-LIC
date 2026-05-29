@@ -4,6 +4,7 @@ import json
 import argparse
 import torch
 import numpy as np
+import math
 from PIL import Image
 from torchvision import transforms
 from piq import psnr 
@@ -183,8 +184,7 @@ def main():
         h, w = min(gt.size(2), rec.size(2)), min(gt.size(3), rec.size(3))
         gt, rec = gt[:, :, :h, :w], rec[:, :, :h, :w]
 
-        # Calculate RGB Metrics
-        psnr_val = psnr(rec, gt, data_range=1.0).item()
+        # Calculate RGB Metrics (LPIPS stays on RGB)
         lpips_val, lpips_res = loss_fn_alex(rec, gt,retPerLayer=True, normalize=True)
         lpips_val = lpips_val.mean().item()
         # Stack into [5, 1, H, W], then sum or average over the first axis (layer)
@@ -258,6 +258,23 @@ def main():
         psnr_y = psnr(rec_yuv[:, 0:1, :, :], gt_yuv[:, 0:1, :, :], data_range=1.0).item()
         psnr_u = psnr(rec_yuv[:, 1:2, :, :], gt_yuv[:, 1:2, :, :], data_range=1.0).item()
         psnr_v = psnr(rec_yuv[:, 2:3, :, :], gt_yuv[:, 2:3, :, :], data_range=1.0).item()
+
+        # Aggregate overall PSNR from Y, U, V by averaging linear MSEs then converting to dB
+        # MSE = MAX^2 / (10^(PSNR/10)) with MAX=1.0
+        def mse_from_psnr(p):
+            if p == float('inf'):
+                return 0.0
+            return 1.0 / (10.0 ** (p / 10.0))
+
+        mse_y = mse_from_psnr(psnr_y)
+        mse_u = mse_from_psnr(psnr_u)
+        mse_v = mse_from_psnr(psnr_v)
+
+        mse_avg = (mse_y + mse_u + mse_v) / 3.0
+        if mse_avg == 0.0:
+            psnr_val = float('inf')
+        else:
+            psnr_val = 10.0 * math.log10(1.0 / mse_avg)
 
         # Adaptive search for bitstream files
         bits_file = None

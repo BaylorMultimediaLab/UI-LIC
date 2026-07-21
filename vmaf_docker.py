@@ -1,10 +1,18 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - Docker VMAF Helper Module
+
+This module (`vmaf_docker.py`) provides an OS-agnostic interface for calculating VMAF (Video Multi-Method Assessment Fusion)
+perceptual quality scores using Docker. By mounting local reconstructed and reference images read-only into a pre-compiled
+static FFmpeg container (`mwader/static-ffmpeg`), it avoids complex host system FFmpeg compilation requirements.
+"""
+
 import subprocess
 import os
 import re
 
 def check_docker_availability():
     """
-    Checks if Docker is installed and the daemon is running.
+    Checks if Docker is installed and the Docker daemon is accessible.
     Returns: (bool, message)
     """
     try:
@@ -21,15 +29,13 @@ def check_docker_availability():
 
 def calculate_vmaf(dist_path, ref_path, docker_image="mwader/static-ffmpeg"):
     """
-    Calculates VMAF score using Dockerized FFmpeg.
+    Calculates VMAF score by mounting local files into a containerized FFmpeg runtime.
     
-    Args:
-        dist_path: Path to the distorted (reconstructed) image.
-        ref_path: Path to the reference (ground truth) image.
-        docker_image: Docker image to use for FFmpeg with VMAF.
-        
+    Mounts reference and reconstructed images as read-only volumes (:ro) into the container,
+    invokes the libvmaf filter via FFmpeg, and parses the resulting score from stderr.
+    
     Returns:
-        float: The VMAF score, or 0.0 if failed.
+        float: The calculated VMAF score, or 0.0 if file validation or container execution fails.
     """
     if not os.path.exists(dist_path) or not os.path.exists(ref_path):
         return 0.0

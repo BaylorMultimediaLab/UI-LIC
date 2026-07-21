@@ -1,6 +1,16 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - RwkvCompress Training Interface
+
+This interface maps UI-LIC training configuration parameters to RwkvCompress's training entry point (`train.py`),
+configuring LALIC model variants, epoch counts, learning rate decay schedules, and dataset directories.
+"""
+
 from base_interface import BaseInterface
 
 class RwkvTrainInterface(BaseInterface):
+    """
+    Training Interface for RwkvCompress (RWKV linear attention) training tasks.
+    """
 
     TASK_NAME = "RwkvCompress"
     

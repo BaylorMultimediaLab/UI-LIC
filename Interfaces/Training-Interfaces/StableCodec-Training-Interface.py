@@ -1,8 +1,19 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - StableCodec Training Interface
+
+This interface maps UI-LIC training configuration parameters to StableCodec's training script (`src/train.py`).
+It automatically converts epoch counts into iteration step counts by probing dataset file counts, manages HuggingFace
+Accelerate mixed-precision settings (bf16), and configures diffusion loss components (L2, LPIPS, CLIP).
+"""
+
 from base_interface import BaseInterface
 import os
 import subprocess
 
 class StableCodecTrainInterface(BaseInterface):
+    """
+    Training Interface for StableCodec (One-step diffusion image compression) training tasks.
+    """
 
     TASK_NAME = "StableCodec"
     

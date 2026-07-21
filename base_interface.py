@@ -1,16 +1,29 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - Base Interface Module
+
+This module provides the BaseInterface abstract base class that standardizes job execution,
+argument mapping, and command-line translation across all integrated learned image compression models.
+It enables seamless translation of unified UI-LIC configuration parameters into model-specific CLI flags
+and manages isolated Conda environment execution.
+"""
+
 import subprocess
 import os
 import platform
 
 class BaseInterface:
     """
-    The Base Interface handles validation and command construction dynamically.
+    Abstract Base Class for model training and testing interfaces.
+    
+    Handles parameter normalization (alias resolution), validation of required arguments,
+    dynamic CLI command construction (including boolean action switches and lists), and
+    subprocess execution within targeted Python environment contexts.
     """
     REQUIRED_ARGS = []
     DEFAULT_VARS = {}
     ALIASES = {}
     CLI_MAPPING = {}
-    ACTION_FLAGS = []  # Defines which booleans are switches (no trailing values)
+    ACTION_FLAGS = []  # Defines which booleans act as CLI switches (flag present without trailing value)
     EXECUTION_PATH = ""
     
     WORKING_DIR = None
@@ -22,12 +35,15 @@ class BaseInterface:
         
         self.params = self.DEFAULT_VARS.copy()
         
+        # Normalize incoming argument keys using model-specific ALIASES dictionary
         clean_job_args = {self.ALIASES.get(k, k): v for k, v in job_args.items()}
         clean_global_args = {self.ALIASES.get(k, k): v for k, v in global_args.items()}
 
+        # Merge global defaults first, then override with task-specific job parameters
         self.params.update(clean_global_args)    
         self.params.update(clean_job_args)
         
+        # Parse string representations of booleans ("true"/"false") into PyTorch/Python bools
         for key, value in self.params.items():
             if isinstance(value, str):
                 cleaned_val = value.strip().lower()

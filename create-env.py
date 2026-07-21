@@ -1,10 +1,21 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - Environment Setup Utility
+
+This script provides automated creation and updating of isolated Conda environments for individual LIC models.
+It creates Python environments at specified target directories (`--prefix`) and installs model-specific dependencies
+from `requirements.txt` files to avoid library version conflicts between different research codebases.
+"""
+
 import subprocess
 import os
 import sys
 
 def setup_conda_env(env_path: str, requirements_file: str, python_version: str = "3.10"):
     """
-    Dynamically creates a Conda environment and installs requirements in an Ubuntu/Linux shell.
+    Dynamically creates a Conda environment at a specified path prefix and installs requirements.
+    
+    Using --prefix ensures environments are stored cleanly within specified project paths rather
+    than global conda environment directories.
     """
     # Expand tildes (~) if the user references their Linux home directory
     env_path = os.path.abspath(os.path.expanduser(env_path))
@@ -16,7 +27,7 @@ def setup_conda_env(env_path: str, requirements_file: str, python_version: str =
 
     print(f"Creating Conda environment at: {env_path} (Python {python_version})")
     
-    # Explicitly include pip to keep it isolated to this environment prefix
+    # Explicitly include pip inside the prefix to isolate package installation from system Python
     create_cmd = [
         "conda", "create",
         "--prefix", env_path,

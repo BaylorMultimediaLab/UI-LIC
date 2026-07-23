@@ -1,3 +1,10 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - LIC-HPCM Training Interface
+
+This interface maps UI-LIC training configuration parameters to LIC-HPCM's training entry point (`train.py`),
+configuring architecture models (HPCM_Base/HPCM_Large), train/test datasets, patch sizes, and loss lambdas.
+"""
+
 from base_interface import BaseInterface
 import os
 import sys
@@ -7,6 +14,9 @@ import subprocess
 import importlib
 
 class LIC_HPCM_TrainInterface(BaseInterface):
+    """
+    Training Interface for LIC-HPCM (Hierarchical Progressive Context Modeling) training tasks.
+    """
 
     TASK_NAME = "HPCM"
     

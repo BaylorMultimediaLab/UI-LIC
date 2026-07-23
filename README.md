@@ -137,6 +137,174 @@ To enable VMAF, add `"use_vmaf": true` to the `evaluation` block in your `argume
 
 ---
 
+## Integration Guidelines
+
+This guide outlines everything a researcher needs to know to integrate a new Learned Image Compression (LIC) model into the UI-LIC framework. Integrating a model enables it to work with the interactive CLI generator ([configure-jobs.py](configure-jobs.py)), execution dispatcher ([dispatcher.py](dispatcher.py)), metric evaluation pipeline ([evaluation.py](evaluation.py)), and visual comparison desktop application ([GUI-Visualizer](GUI-Visualizer/desktop_app.py)).
+
+---
+
+### Step 1: Model Codebase Setup (`LIC-Models/<ModelName>/`)
+Place your model repository source code under `LIC-Models/<ModelName>/`. A typical structure includes:
+```
+LIC-Models/<ModelName>/
+├── weights/                  # Pretrained model checkpoints (.pth, .pkl, etc.)
+├── custom-evaluation.py      # Dedicated evaluation/inference script for UI-LIC
+├── requirements.txt          # Python dependencies specific to this model
+└── src/                      # Model architectures, layers, and entropy coders
+```
+
+---
+
+### Step 2: Model Evaluation Script & Generalization (Suggested Best Practices)
+
+When evaluating models within UI-LIC, the primary goal of your inference/testing script is to generate reconstructed images and bitstreams that UI-LIC's [evaluation.py](evaluation.py) and GUI visualizer can process automatically.
+
+> **Tip — Dedicated Custom Evaluation Script:**  
+> If modifying the upstream repository's original inference script is invasive or complex, we strongly suggest creating a lightweight custom evaluation script (e.g. `custom-evaluation.py` or `test_image_encoding.py`) inside `LIC-Models/<ModelName>/`.
+
+#### Suggested Generalization Best Practices:
+*Note: The following are recommended guidelines to improve portability across hardware and datasets. Certain LIC models may have inherent hardware or architectural constraints.*
+
+1. **Input & Resolution Agnosticism:** Ensure your evaluation script accepts arbitrary image formats (`.png`, `.jpg`, `.jpeg`, `.webp`) and handles variable input image dimensions dynamically without assuming fixed patch sizes (e.g., $256 \times 256$).
+2. **Filename Standardization:** Strip model-specific filename prefixes/suffixes (such as `rec_`, `bits_`, or bitrate values) from your output files. Save reconstructed images as `<base_name>.<ext>` (e.g., `kodim01.png`) and bitstreams as `<base_name>.pt` or `<base_name>.bin` (e.g., `kodim01.pt`). This ensures 1-to-1 matching with original dataset filenames.
+3. **Architecture Parameter Exposure:** Avoid hardcoding model architecture hyperparameters (e.g., channel counts `-N 128`, heads, or quality scaling factors) inside Python files. Expose them via CLI arguments so UI-LIC can evaluate different model variants.
+4. **Hardware & Device Abstraction:** Avoid hardcoding specific CUDA device indices (`cuda:0`) or GPU series assumptions. Use dynamic PyTorch device selection:
+   ```python
+   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+   ```
+
+---
+
+### Step 3: Environment & Pretrained Weight Registration (`quick-start.py`)
+
+To allow users to automatically build Conda environments and download pre-trained weights for your model using [quick-start.py](quick-start.py), register your model's weight checkpoints in the `WEIGHTS_DATA` dictionary in `quick-start.py` using Google Drive file IDs:
+
+```python
+"YourModelName": {
+    "base_path": "LIC-Models/YourModelName/weights/",
+    "description": "Short description of model quality variants.",
+    "options": [
+        {"name": "your_model_q1.pth", "id": "GOOGLE_DRIVE_FILE_ID", "desc": "Quality level 1 / Lambda X"},
+        ...
+    ]
+}
+```
+Each checkpoint entry under `"options"` requires a `"name"` (target file name), `"id"` (the Google Drive file ID used for automated downloading), and an optional `"desc"` (description of the quality level or lambda value).
+
+Also ensure your model has a `requirements.txt` file inside its directory so [create-env.py](create-env.py) can construct its Conda environment.
+
+---
+
+### Step 4: Implementing the Unified Interface (`Interfaces/`)
+
+The core bridge between UI-LIC and your model is an Interface class inheriting from `BaseInterface` ([base_interface.py](base_interface.py)).
+
+> **Important:**  
+> The primary objective of the testing interface is to bridge CLI/GUI parameters to your model's evaluation script so it produces outputs compatible with UI-LIC's metric pipeline.
+
+Create a testing interface script in `Interfaces/Testing-Interfaces/<ModelName>-Testing-Interface.py` (and optionally a training interface in `Interfaces/Training-Interfaces/<ModelName>-Training-Interface.py`).
+
+This interface script serves as the translation layer between UI-LIC and your model:
+- **Parameter Mapping:** It receives standardized UI-LIC arguments (e.g., `dataset`, `checkpoint`, `save_dir`) and uses `CLI_MAPPING` to translate them directly into the specific command-line flags expected by your model's evaluation script (e.g., `--data`, `--checkpoint`, `--save_dir`).
+- **Command Construction & Execution:** It sets `EXECUTION_PATH` to point to your model's evaluation script (e.g., `LIC-Models/<ModelName>/custom-evaluation.py`), constructs the full shell command, and executes it within the model's environment.
+
+> **Note — GUI Discovery & Scope:**  
+> Placing your testing interface in `Interfaces/Testing-Interfaces/` allows the GUI application (`GUI-Visualizer/desktop_app.py`) to automatically discover your model's `TASK_NAME` and auto-generate parameter input fields. Note that the GUI is designed exclusively for inference, visual side-by-side comparison, and metric reporting. Model training is executed via CLI (`configure-jobs.py` and `dispatcher.py`).
+
+#### Interface Template:
+```python
+import os
+from base_interface import BaseInterface
+
+class YourModelTestInterface(BaseInterface):
+
+    # 1. TASK_NAME must be unique and match your model identifier
+    TASK_NAME = "YourModelName"
+    
+    USE_MODULE_EXECUTION = False
+    EXECUTION_PATH = "LIC-Models/YourModelName/custom-evaluation.py"
+    WORKING_DIR = "LIC-Models/YourModelName"  # Optional: execution working dir
+
+    # 2. Parameters required for job execution
+    REQUIRED_ARGS = ["checkpoint", "dataset", "save_dir"]
+    
+    # 3. Boolean switch flags (passed without trailing values)
+    ACTION_FLAGS = ["cuda", "half"]
+
+    # 4. Default parameter values
+    DEFAULT_VARS = {
+        "checkpoint": None,
+        "dataset": None,
+        "save_dir": None,
+        "cuda": True,
+        "half": False,
+    }
+
+    # 5. Parameter aliases (e.g. mapping global UI-LIC parameter names to standard keys)
+    ALIASES = {
+        "test_dataset": "dataset",
+        "data": "dataset",
+        "output": "save_dir",
+        "out": "save_dir"
+    }
+
+    # 6. Map unified internal keys to your CLI flags
+    CLI_MAPPING = {
+        "checkpoint": "--checkpoint",
+        "dataset": "--data",
+        "save_dir": "--save_dir",
+        "cuda": "--cuda",
+        "half": "--half"
+    }
+
+    def __init__(self, job_args=None, global_args=None):
+        super().__init__(job_args, global_args)
+        
+        # Fallback to global test_dataset if not provided locally
+        if not self.params.get("dataset") and global_args and "test_dataset" in global_args:
+            self.params["dataset"] = global_args["test_dataset"]
+
+        # Ensure target directory and input paths are resolved to absolute paths
+        for key in ["checkpoint", "dataset", "save_dir"]:
+            if self.params.get(key):
+                self.params[key] = os.path.abspath(os.path.expanduser(self.params[key]))
+```
+
+---
+
+### Step 5: Output Directory Contract & File Naming Conventions
+
+When your model's evaluation script receives the `--save_dir` parameter, it **must** structure its output files into the following directory layout so [evaluation.py](evaluation.py) and the GUI app can compute metrics automatically:
+
+```
+<save_dir>/
+├── reconstruction/          (or reconstructions/)
+│   ├── kodim01.png
+│   ├── kodim02.png
+│   └── ...
+└── bitstreams/              (or bitstream/)
+    ├── kodim01.pt           (or kodim01.bin)
+    ├── kodim02.pt
+    └── ...
+```
+
+#### Key Output Rules:
+1. **Reconstructed Images (`<save_dir>/reconstruction/`):** Save decoded image files with filenames matching the exact base name of the input image (`<image_base_name>.<ext>`). Valid formats include `.png`, `.jpg`, `.jpeg`, and `.webp`.
+2. **Bitstream Files (`<save_dir>/bitstreams/`):** Save bitstream files or string payloads using `<image_base_name>.pt` or `<image_base_name>.bin`. UI-LIC calculates Bit-Per-Pixel (BPP) automatically based on the size of the bitstream file in bits divided by original image dimensions ($W \times H$).
+3. **Automated Evaluation:** Once inference completes, [dispatcher.py](dispatcher.py) automatically invokes [evaluation.py](evaluation.py) on `<save_dir>`, calculating PSNR (RGB & YUV), SSIM, LPIPS, BPP, and optional Docker-based VMAF scores.
+
+---
+
+### Step 6: Verification Checklist
+
+After adding your model code, custom evaluation script, and interface class, verify your integration using the following steps:
+
+1. **CLI Job Configuration:** Run `python configure-jobs.py --test` and verify your model's `TASK_NAME` appears in the list of available models and prompts for all required arguments.
+2. **Execution Dispatcher:** Run `python dispatcher.py --test` with your generated `arguments.json` to verify environment switching, job execution, and automatic triggering of [evaluation.py](evaluation.py).
+3. **GUI Visualizer (Inference & Evaluation):** Launch `python ./GUI-Visualizer/desktop_app.py`. Verify that your testing interface (located in `Interfaces/Testing-Interfaces/`) is dynamically discovered in the codec list, inference executes cleanly, and image reconstructions and metric reports display properly in the visualizer tabs.
+
+---
+
 ## Integrated Models
 
 The following models are integrated into the platform, each with a specialized interface to bridge their unique CLI requirements:

@@ -1,7 +1,17 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - AV1 Testing Interface
+
+This interface maps UI-LIC evaluation parameters (QP quality parameter, input/output paths) to the standard video
+codec evaluation runner (`Standard-Codecs/eval_standard.py`) for the AV1 codec format.
+"""
+
 import os
 from base_interface import BaseInterface
 
 class AV1Interface(BaseInterface):
+    """
+    Testing Interface for AV1 standard image/video compression benchmark comparisons.
+    """
     TASK_NAME = "AV1"
     USE_MODULE_EXECUTION = False
     EXECUTION_PATH = "Standard-Codecs/eval_standard.py"

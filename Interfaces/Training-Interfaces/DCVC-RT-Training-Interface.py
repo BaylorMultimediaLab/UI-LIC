@@ -1,8 +1,18 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - DCVC-RT Training Interface
+
+This interface maps UI-LIC training configuration parameters to DCVC-RT's intra training script
+(`Training/train_dcvc_rt_intra.py`), verifying mandatory C++ dependencies (`py_rans`) prior to job launch.
+"""
+
 import os
 import subprocess
 from base_interface import BaseInterface
 
 class DCVCRTTrainInterface(BaseInterface):
+    """
+    Training Interface for DCVC-RT (Deep Contextual Video Compression - Real Time) intra training.
+    """
 
     TASK_NAME = "DCVC-RT"
     

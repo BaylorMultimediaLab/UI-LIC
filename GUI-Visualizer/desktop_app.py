@@ -1,9 +1,18 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - Graphical User Interface (GUI) Desktop Visualizer
+
+This application (`GUI-Visualizer/desktop_app.py`) provides a cross-platform desktop visualizer for the UI-LIC framework.
+It allows researchers to interactively discover testing interfaces, configure codec parameters, execute batch dataset inference,
+visually compare reconstructed images side-by-side using an interactive split-viewport slider, view perceptual error map overlays
+(LPIPS and color gradients), and generate tabular metric reports.
+"""
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import os
 import sys
 
-# Add parent directory to sys.path to allow importing from root
+# Add parent project root directory to sys.path to allow importing BaseInterface and framework utilities
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import threading
@@ -20,6 +29,7 @@ import numpy as np
 from dispatcher import Dispatcher
 
 try:
+    # Enable high-DPI scaling on Windows hosts
     from ctypes import windll
     windll.shcore.SetProcessDpiAwareness(1)
 except Exception:

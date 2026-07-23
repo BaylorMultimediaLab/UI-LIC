@@ -1,9 +1,19 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - RwkvCompress Testing Interface
+
+This interface maps UI-LIC configuration parameters to RwkvCompress's evaluation script (`eval.py`),
+handling parameter flags (model architecture, checkpoint paths, quality levels q1-q6) for linear-attention image compression.
+"""
+
 import os
 import subprocess
 from base_interface import BaseInterface
 
 
 class RwkvCompressTestInterface(BaseInterface):
+    """
+    Testing Interface for RwkvCompress (RWKV-based learned image compression) evaluation.
+    """
 
     TASK_NAME = "RwkvCompress"
 

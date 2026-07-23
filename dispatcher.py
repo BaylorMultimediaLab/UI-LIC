@@ -1,3 +1,12 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - Execution Dispatcher Engine
+
+This module (`dispatcher.py`) serves as the central execution engine of the UI-LIC framework. It reads task queues
+from JSON configuration files (`arguments.json`), performs pre-execution safety checks (dataset path verification and
+minimum image patch size validation), switches into model-specific Conda environments, executes training or testing
+jobs via unified interface wrappers, and automatically invokes `evaluation.py` to calculate perceptual and quantitative metrics.
+"""
+
 import os
 import sys
 import json
@@ -9,6 +18,13 @@ import importlib.util
 import shutil
 
 class Dispatcher:
+    """
+    Job Dispatcher and Execution Manager.
+    
+    Parses configured job queues, verifies dataset/checkpoint existence interactively before execution,
+    prevents PyTorch dataloader crashes by validating image dimensions against model patch requirements,
+    and manages hands-free evaluation pipeline invocation upon completion.
+    """
     def __init__(self, arg_json_path, run_train=False, run_test=False, train_interfaces_path=None, test_interfaces_path=None):
         self.arg_json_path = arg_json_path
         self.registry = {}

@@ -1,3 +1,12 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - Metric Evaluation Pipeline
+
+This script (`evaluation.py`) performs automated quantitative and perceptual metric evaluations on reconstructed
+images produced by LIC models. It matches reconstructed output files with reference original dataset images,
+calculates Bit-Per-Pixel (BPP), PSNR (RGB & YUV space using BT.601 standards), SSIM, LPIPS perceptual distance,
+color gradient error maps, and optional Dockerized VMAF score reports.
+"""
+
 import os
 import sys
 import json
@@ -12,7 +21,7 @@ from skimage.metrics import structural_similarity as ssim
 import lpips
 import scipy.ndimage
 
-# Import Docker VMAF helper
+# Import Docker VMAF helper module for optional perceptual video evaluation
 try:
     from vmaf_docker import calculate_vmaf, check_docker_availability
 except ImportError:
@@ -22,6 +31,9 @@ except ImportError:
 
 
 def compute_color_gradient(img_np):
+    """
+    Computes a Sobel gradient magnitude image for error visualization maps in the GUI.
+    """
     if hasattr(img_np, "detach"):
         img_np = img_np.detach().cpu().numpy()
 

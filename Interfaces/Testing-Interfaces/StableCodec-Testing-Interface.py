@@ -1,8 +1,19 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - StableCodec Testing Interface
+
+This interface maps UI-LIC configuration parameters to StableCodec's compression entry point (`src/compress.py`).
+It manages paths for the core diffusion model (SD-Turbo), auxiliary ELIC checkpoint, model weights, input dataset paths,
+and structures reconstructed images and bitstreams into target subdirectories.
+"""
+
 import os
 from base_interface import BaseInterface
 
 
 class StableCodecInterface(BaseInterface):
+    """
+    Testing Interface for StableCodec (One-step diffusion image compression) evaluation.
+    """
 
     TASK_NAME = "StableCodec"
     USE_MODULE_EXECUTION = False

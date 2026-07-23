@@ -1,8 +1,19 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - DCVC-RT Testing Interface
+
+This testing interface bridges UI-LIC parameters to DCVC-RT's image evaluation script (`Testing/test_image_encoding.py`).
+It translates standard UI-LIC CLI arguments (such as `save_dir`, `cuda`, `qp`, `model_path`) into model-specific flags
+and structures reconstructed images and bitstreams into uniform subdirectories for automated evaluation.
+"""
+
 import os
 import subprocess
 from base_interface import BaseInterface
 
 class DCVCRTImageTestInterface(BaseInterface):
+    """
+    Testing Interface for DCVC-RT (Deep Contextual Video Compression - Real Time) evaluation.
+    """
 
     TASK_NAME = "DCVC-RT"
     

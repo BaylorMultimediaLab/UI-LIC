@@ -1,7 +1,17 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - LIC-TCM Training Interface
+
+This interface maps UI-LIC training configuration parameters to LIC-TCM's training script (`train.py`),
+handling Transformer-CNN channel settings (N=64 or N=128), MultiStepLR milestone schedules (`lr_epoch`), and loss options (MSE/MS-SSIM).
+"""
+
 from base_interface import BaseInterface
 
 
 class LICTCMTrainInterface(BaseInterface):
+    """
+    Training Interface for LIC-TCM (Transformer-CNN image compression) training tasks.
+    """
 
     TASK_NAME = "LIC-TCM"
     

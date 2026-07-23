@@ -1,3 +1,12 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - Quick-Start Batch Setup Utility
+
+This script (`quick-start.py`) provides an interactive batch setup wizard for the entire framework.
+It allows researchers to selectively build Conda environments and download pretrained weights from Google Drive
+for all integrated models (StableCodec, ELIC, RwkvCompress, LIC-HPCM, LIC-TCM, DCVC-RT), presenting a full setup summary
+and checking existing installations before performing changes.
+"""
+
 import os
 import sys
 import argparse
@@ -5,7 +14,7 @@ import importlib.util
 import subprocess
 import webbrowser
 
-# Dynamically import create-env.py because of the dash in filename
+# Dynamically import create-env.py using importlib to work around Python's syntax restriction on hyphens in module names
 def load_create_env():
     script_path = os.path.join(os.path.dirname(__file__), "create-env.py")
     if not os.path.exists(script_path):

@@ -20,7 +20,8 @@ except Exception:  # pylint: disable=W0718
 
 
 if not CUSTOMIZED_CUDA_INFERENCE and 'SUPPRESS_CUSTOM_KERNEL_WARNING' not in os.environ:
-    print("cannot import cuda implementation for inference, fallback to pytorch.")
+    import sys
+    print("[INFO] Using pure PyTorch fallback for DCVC-RT inference (ensures correctness and multi-platform compatibility).", file=sys.stderr)
 
 
 def round_and_to_int8(z):

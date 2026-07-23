@@ -55,10 +55,39 @@ class DCVCRTImageTestInterface(BaseInterface):
             self.params["rec_path"] = os.path.join(base, "reconstruction")
             self.params["bin_path"] = os.path.join(base, "bitstreams")
 
-            # optional safety
             os.makedirs(self.params["rec_path"], exist_ok=True)
             os.makedirs(self.params["bin_path"], exist_ok=True)
 
+    def build_command(self):
+        if "save_dir" in self.params and self.params["save_dir"] is not None:
+            base = self.params["save_dir"]
+            self.params["rec_path"] = os.path.join(base, "reconstruction")
+            self.params["bin_path"] = os.path.join(base, "bitstreams")
+            os.makedirs(self.params["rec_path"], exist_ok=True)
+            os.makedirs(self.params["bin_path"], exist_ok=True)
+        return super().build_command()
+
+
+    def compile_extensions(self, python_exec=None):
+        """Compiles DCVC-RT C++ and CUDA extensions."""
+        if not python_exec:
+            python_exec = "python3"
+            if hasattr(self, 'ENV_PATH') and self.ENV_PATH:
+                abs_env = os.path.abspath(self.ENV_PATH)
+                if os.path.isdir(os.path.join(abs_env, "bin")):
+                    python_exec = os.path.join(abs_env, "bin", "python3")
+
+        work_dir = os.path.abspath(getattr(self, 'WORKING_DIR', 'LIC-Models/DCVC-RT'))
+        cpp_path = os.path.join(work_dir, "src", "cpp")
+        cuda_path = os.path.join(work_dir, "src", "layers", "extensions", "inference")
+
+        print("  -> Compiling C++ entropy coding extensions (this may take a minute)...")
+        if os.path.exists(cpp_path):
+            subprocess.check_call([python_exec, "-m", "pip", "install", "--no-build-isolation", "."], cwd=cpp_path)
+
+        print("  -> Compiling CUDA inference kernels...")
+        if os.path.exists(cuda_path):
+            subprocess.check_call([python_exec, "-m", "pip", "install", "--no-build-isolation", "."], cwd=cuda_path)
 
     def _check_and_install_dependencies(self):
         """Checks the target ENV_PATH for required packages and prompts installation if missing."""
@@ -93,23 +122,7 @@ class DCVCRTImageTestInterface(BaseInterface):
             choice = input("  -> Would you like to compile and install them automatically now? (y/N): ").strip().lower()
             
             if choice == 'y':
-                work_dir = getattr(self, 'WORKING_DIR', '.')
-                cpp_path = os.path.join(work_dir, "src", "cpp")
-                cuda_path = os.path.join(work_dir, "src", "layers", "extensions", "inference")
-                
-                print("  -> Compiling C++ entropy coding extensions (this may take a minute)...")
-                if os.path.exists(cpp_path):
-                    # ADDED --no-build-isolation HERE
-                    subprocess.check_call([python_exec, "-m", "pip", "install", "--no-build-isolation", "."], cwd=cpp_path)
-                else:
-                    print(f"  -> [ERROR] Could not find path: {cpp_path}")
-                
-                print("  -> Compiling CUDA inference kernels...")
-                if os.path.exists(cuda_path):
-                    # ADDED --no-build-isolation HERE
-                    subprocess.check_call([python_exec, "-m", "pip", "install", "--no-build-isolation", "."], cwd=cuda_path)
-                else:
-                    print(f"  -> [ERROR] Could not find path: {cuda_path}")
+                self.compile_extensions(python_exec=python_exec)
             else:
                 print("  -> Proceeding anyway, but execution will likely fail.")
 

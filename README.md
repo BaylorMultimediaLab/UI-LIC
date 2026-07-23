@@ -147,28 +147,69 @@ The following models are integrated into the platform, each with a specialized i
 - **Core Concept:** Uses a one-step diffusion process (SD-Turbo) combined with a dual-branch coding structure.
 - **Strength:** Exceptional visual realism at ultra-low bitrates (as low as 0.005 bpp).
 
+#### 50-Series Compatibility Changes
+- **`StableCodec.py`:** Added `_encode_latent` helper that casts inputs to the model's native dtype before VAE encoding; denoised latents are also cast back before decoding to prevent dtype mismatches on 50-series cards.
+- **`latent_codec.py`:** `get_mask_four_parts` now accepts and propagates an explicit `dtype` argument for all four checkerboard masks; `compress_group_with_mask` and `decompress_group_with_mask` cast their return tensors back to the input dtype.
+
+---
+
 ### **ELIC**
 *Efficient Learned Image Compression with Context-Adaptive Masked Modeling*
 - **Recommended Python Version:** 3.10
 - **Strength:** State-of-the-art Rate-Distortion performance, balancing complexity and compression.
+
+#### 50-Series Compatibility Changes
+- **`Network.py`:** Imports of `trunc_normal_`, `GaussianConditional`, and `ste_round` now use try/except fallback chains to support both old and new `timm`/`compressai` API locations.
+- **`Network.py`:** `load_state_dict` now calls `self.update(force=True)` after loading weights to rebuild entropy coding tables required by newer compressai versions.
+- **`requirements.txt`:** Loosened from pinned CUDA 11 packages to `>=`-bounded versions targeting PyTorch 2.4+; added `numpy<2.0.0` upper bound to avoid ABI breakage.
+
+---
 
 ### **DCVC-RT**
 *Deep Contextual Video Compression - Real Time*
 - **Recommended Python Version:** 3.12
 - **Strength:** Optimized for low-latency and real-time performance. Foundation for video tasks.
 
+#### 50-Series Compatibility Changes
+- **`rans.cpp`:** Output buffer allocation increased to `4× symbol count + 10000` with a pointer bounds assertion, fixing a buffer-overrun crash on sm_120 (RTX 50-series) hardware.
+- **`setup.py`:** Removed the `-arch=native` nvcc flag; compute capability is now detected at runtime instead of being baked in at build time.
+- **`requirements.txt`:** Added `ninja` and `nvidia-cuda-nvcc` to ensure the JIT/AOT build toolchain is always available.
+- **Testing interface:** Extracted a `compile_extensions` method so `create-env.py` can trigger C++ and CUDA extension compilation automatically after pip install.
+
+---
+
 ### **LIC-TCM**
 *Learned Image Compression with Mixed Transformer-CNN Architectures*
 - **Recommended Python Version:** 3.10
 - **Strength:** Superior context modeling for complex textures using Transformers.
+
+#### 50-Series Compatibility Changes
+- **`requirements.txt`:** CUDA index URL updated from `cu121` to `cu128`; PyTorch/torchvision/torchaudio minimums bumped to `>=2.4.0`/`>=0.19.0`/`>=2.4.0` for sm_120 (Blackwell) wheel support.
+- **Testing interface:** Added explicit `ENV_PATH` and `WORKING_DIR` class attributes so the dispatcher and `create-env.py` can locate the environment without relying on inferred paths.
+
+---
 
 ### **LIC-HPCM**
 *Learned Image Compression with Hierarchical Progressive Context Modeling*
 - **Recommended Python Version:** 3.8
 - **Strength:** Optimized for hardware acceleration and fast parallel decoding.
 
+#### 50-Series Compatibility Changes
+- **`HPCM_Base`, `HPCM_Base_PhiContext`, `HPCM_Large`:** `adaptive_params_list` parameters no longer hard-code `device='cuda'` at construction, removing the import-time CUDA dependency.
+- **`entropy_models/__init__.py` and `entropy_models.py`:** Added try/except relative/absolute import fallbacks for the compiled `_CXX` extension.
+- **`requirements.txt`:** PyTorch/torchvision/torchaudio minimums bumped to `>=2.4.0`/`>=0.19.0`/`>=2.4.0`.
+- **Testing interface:** Added `compile_extensions` and `_check_and_install_dependencies` to automatically build the `unbounded_rans` C++ extension if it is missing from the active environment.
+
+---
+
 ### **RwkvCompress**
 *Efficient Learned Image Compression via RWKV architecture*
 - **Recommended Python Version:** 3.10
 - **Strength:** Global dependency modeling with linear-attention computational efficiency.
+
+#### 50-Series Compatibility Changes
+- **`biwkv4_cuda_new.cu`:** Replaced deprecated `k.type()` with `k.scalar_type()` in both `AT_DISPATCH_FLOATING_TYPES` calls to fix a compile error with modern PyTorch.
+- **`lalic.py`:** JIT load logic now detects the GPU's compute capability at startup and generates matching `-gencode arch=compute_XY,code=sm_XY` flags dynamically instead of hardcoding `sm_86`; the loaded module is also cached to avoid redundant recompilation.
+- **`eval.py`:** Removed erroneous `.item()` call on IQA metric tensors.
+- **`requirements.txt`:** Added `ninja` and `nvidia-cuda-nvcc` as explicit dependencies.
 

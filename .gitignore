@@ -3,6 +3,15 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# weights and enviornments
+
+weights/
+*-env/
+
+# sd-turbo
+sd-turbo/
+
+
 testing-training-enviornment
 # C extensions
 *.so

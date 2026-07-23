@@ -54,7 +54,7 @@ WEIGHTS_DATA = {
         "base_path": "LIC-Models/ELIC/weights/",
         "description": "Official ELIC pretrained model.",
         "options": [
-            {"name": "ELIC_0450_ft_3980_Plateau.pth.tar", "id": "1jUfYJdZd0-1uuKQJiozcBfgGMJ8CfM6lrXOZWv6RUDN",  "desc": "lambda 0.45 (Highest quality)"},
+            {"name": "ELIC_0450_ft_3980_Plateau.pth.tar", "id": "1uuKQJiozcBfgGMJ8CfM6lrXOZWv6RUDN",  "desc": "lambda 0.45 (Highest quality)"},
             {"name": "ELIC_0150_ft_3980_Plateau.pth.tar", "id": "1s544Uxv0gBY3WvKBcGNb3Fb22zfmd9PL",  "desc": "lambda 0.15"},
             {"name": "ELIC_0032_ft_3980_Plateau.pth.tar", "id": "1Moody9IR8CuAGwLCZ_ZMTfZXT0ehQhqc",  "desc": "lambda 0.032"},
             {"name": "ELIC_0016_ft_3980_Plateau.pth.tar", "id": "1MWlYAmpHbWlGtG7MBBTPEew800grY5yC",  "desc": "lambda 0.016"},
@@ -125,7 +125,7 @@ WEIGHTS_DATA = {
         "base_path": "LIC-Models/DCVC-RT/weights/",
         "description": "Deep Context Video Compression (Real-Time).",
         "options": [
-            {"name": "dcvc_rt_weights.pth", "url": f"https://onedrive.live.com/?redeem=aHR0cHM6Ly8xZHJ2Lm1zL2YvYy8yODY2NTkyZDVjNTVkZjhjL0VzdTBLSi1JMmt4Q2pFUDU2NUFSeF9ZQjg4aTBVblI2WG5PRHFGY3ZaczRMY0E%5FZT1ieThDTzg&cid=2866592D5C55DF8C&id=2866592D5C55DF8C%21s2efcd635a61a430eaa19d3c916218123&parId=2866592D5C55DF8C%21s9f28b4cbda88424c8c43f9eb9011c7f6&o=OneUp", "desc": "Full weight package"},
+            {"name": "cvpr2025_image.pth.tar", "url": "https://1drv.ms/f/c/2866592d5c55df8c/Esu0KJ-I2kxCjEP565ARx_YB88i0UnR6XnODqFcvZs4LcA?e=by8CO8", "desc": "Pretrained Image Model (Manual Download)"},
         ]
     }
 }
@@ -137,15 +137,32 @@ def download_file(option, base_dir):
     dest_path = os.path.join(base_dir, name)
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
     
-    if os.path.exists(dest_path):
+    if os.path.exists(dest_path) and os.path.getsize(dest_path) > 0:
         print(f" [SKIP] {name} already exists.")
         return dest_path
 
     print(f" [DOWNLOADING] {name}...")
     try:
         if "id" in option:
-            subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "gdown"], check=True)
-            subprocess.run([sys.executable, "-m", "gdown", option["id"], "-O", dest_path], check=True)
+            file_id = option["id"]
+            res = subprocess.run([sys.executable, "-m", "gdown", file_id, "-O", dest_path, "--quiet"])
+            if res.returncode != 0 or not os.path.exists(dest_path) or os.path.getsize(dest_path) == 0:
+                print(f" [INFO] gdown rate-limited. Trying direct curl fallback for {name}...")
+                curl_url = f"https://drive.usercontent.google.com/download?id={file_id}&confirm=t"
+                subprocess.run(["curl", "-L", "-s", curl_url, "-o", dest_path])
+                
+                if os.path.exists(dest_path) and os.path.getsize(dest_path) > 0:
+                    sz_mb = os.path.getsize(dest_path) / (1024 * 1024)
+                    print(f" [SUCCESS] Downloaded {name} ({sz_mb:.1f} MB) via direct link.")
+                else:
+                    print(f" [WARNING] Download rate-limited for {name}.")
+                    print(f" -> Direct Browser Link: https://drive.google.com/uc?id={file_id}")
+                    if os.path.exists(dest_path):
+                        os.remove(dest_path)
+                    return None
+            else:
+                sz_mb = os.path.getsize(dest_path) / (1024 * 1024)
+                print(f" [SUCCESS] Downloaded {name} ({sz_mb:.1f} MB).")
         elif "url" in option and option["url"] != "TODO":
             subprocess.run(["curl", "-L", option["url"], "-o", dest_path], check=True)
         else:
@@ -156,31 +173,49 @@ def download_file(option, base_dir):
         print(f" [ERROR] Failed to download {name}: {e}")
         return None
 
-def prompt_manual_download(option, base_dir):
-    name = option.get("dest_name", option["name"])
-    dest_path = os.path.join(base_dir, name)
-    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+def clear_screen():
+    sys.stdout.write("\033[H\033[2J")
+    sys.stdout.flush()
 
-    url = option.get("url")
-    if not url:
-        print(f" [ERROR] No URL available for {name}")
-        return None
+def handle_manual_downloads(model_name, options, base_dir):
+    if not options:
+        return
+    
+    url = options[0].get("url")
+    os.makedirs(base_dir, exist_ok=True)
+    
+    while True:
+        clear_screen()
+        print(f"\n--- MANUAL DOWNLOAD: {model_name} ---")
+        print(f"\n1. URL: {url}")
+        print(f"2. PATH: {base_dir}")
+        print(f"\n3. STATUS:")
+        
+        missing_count = 0
+        for opt in options:
+            exists = os.path.exists(os.path.join(base_dir, opt['name']))
+            status = "[FOUND]" if exists else "[MISSING]"
+            if not exists: missing_count += 1
+            print(f"   {status} {opt['name']}")
+        
+        if missing_count == 0:
+            print(f"\n[SUCCESS] All {model_name} files found.")
+            input("Press ENTER to continue...")
+            return
 
-    print(f" [MANUAL DOWNLOAD] Opening browser for {name}...")
-    try:
-        webbrowser.open(url)
-    except Exception as e:
-        print(f" [WARNING] Could not open browser automatically: {e}")
-        print(f" [INFO] Please open this URL manually: {url}")
-
-    print(f" [ACTION REQUIRED] Save the file to: {dest_path}")
-    input(" Press ENTER once the download is complete...")
-
-    if not os.path.exists(dest_path):
-        print(f" [ERROR] File not found at {dest_path}")
-        return None
-
-    return dest_path
+        print(f"\n[Commands] [ENTER] Verify | [O]pen Link | [S]kip | [Q]uit")
+        resp = input("Choice: ").lower().strip()
+        
+        if resp == 'o':
+            try:
+                webbrowser.open(url)
+            except Exception:
+                print("Failed to open browser. Please copy the URL manually.")
+                input("Press ENTER...")
+        elif resp == 's':
+            return
+        elif resp == 'q':
+            sys.exit(0)
 
 def select_from_list(items, title, multi=True, descriptions=None):
     print(f"\n--- {title} ---")
@@ -231,29 +266,66 @@ def main():
             {"name": "eval", "python": "3.10", "req": "evaluation-requirements.txt"}
         ]
 
+        def is_env_setup(m):
+            env_name = f"{m['name']}-env"
+            env_path = os.path.join(base_path, env_name)
+            py_bin = os.path.join(env_path, "bin", "python3")
+            py_exe = os.path.join(env_path, "Scripts", "python.exe")
+            return os.path.exists(py_bin) or os.path.exists(py_exe) or os.path.exists(env_path)
+
         model_names = [m["name"] for m in models]
-        selected_models = model_names if args.all else select_from_list(model_names, "Select Models to Setup Environments")
+        model_descs = ["(Already setup)" if is_env_setup(m) else "(Not setup)" for m in models]
+        selected_models = model_names if args.all else select_from_list(model_names, "Select Models to Setup Environments", descriptions=model_descs)
 
         # 2. Weights Selection
         weight_models = [m for m in model_names if m in WEIGHTS_DATA]
-        selected_weights = weight_models if args.all else select_from_list(weight_models, "Select Models to Download Weights")
+        
+        # Helper to check if model has any missing weights
+        def has_missing_weights(m_name):
+            data = WEIGHTS_DATA[m_name]
+            b_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), data["base_path"])
+            for o in data["options"]:
+                name = o.get("dest_name", o["name"])
+                t_path = os.path.join(b_dir, name)
+                if not (os.path.exists(t_path) and os.path.getsize(t_path) > 0):
+                    return True
+            return False
+
+        weight_descriptions = []
+        for m in weight_models:
+            status = " (Missing weights)" if has_missing_weights(m) else " (All downloaded)"
+            weight_descriptions.append(WEIGHTS_DATA[m]["description"] + status)
+
+        selected_weights = weight_models if args.all else select_from_list(weight_models, "Select Models to Download Weights", descriptions=weight_descriptions)
 
         # 4. Specific Weight Selection (Detailed)
         weights_to_download = {} # {model_name: [options]}
         if selected_weights:
             for m_name in selected_weights:
                 data = WEIGHTS_DATA[m_name]
-                options = data["options"]
+                b_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), data["base_path"])
                 
+                # Filter to show ONLY missing weights
+                missing_options = []
+                for o in data["options"]:
+                    name = o.get("dest_name", o["name"])
+                    t_path = os.path.join(b_dir, name)
+                    if not (os.path.exists(t_path) and os.path.getsize(t_path) > 0):
+                        missing_options.append(o)
+
+                if not missing_options:
+                    print(f"\n[MODEL INFO] {m_name}: All pretrained weights are ALREADY downloaded!")
+                    continue
+
                 if args.all:
-                    weights_to_download[m_name] = options
+                    weights_to_download[m_name] = missing_options
                 else:
                     print(f"\n[MODEL INFO] {m_name}: {data['description']}")
-                    item_names = [o["name"] for o in options]
-                    item_descs = [o.get("desc", "") for o in options]
-                    selected_opts = select_from_list(item_names, f"Select specific weights for {m_name}", descriptions=item_descs)
+                    item_names = [o["name"] for o in missing_options]
+                    item_descs = [o.get("desc", "") for o in missing_options]
+                    selected_opts = select_from_list(item_names, f"Select missing weights for {m_name}", descriptions=item_descs)
                     if selected_opts:
-                        weights_to_download[m_name] = [o for o in options if o["name"] in selected_opts]
+                        weights_to_download[m_name] = [o for o in missing_options if o["name"] in selected_opts]
 
         # 5. Final Confirmation
         print("\n" + "="*60)
@@ -340,10 +412,10 @@ def main():
                     except: print("  [ERROR] sd-turbo download failed.")
 
             base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), data["base_path"])
-            for option in options:
-                if m_name == "DCVC-RT":
-                    dest_path = prompt_manual_download(option, base_dir)
-                else:
+            if m_name == "DCVC-RT":
+                handle_manual_downloads(m_name, options, base_dir)
+            else:
+                for option in options:
                     dest_path = download_file(option, base_dir)
 
 

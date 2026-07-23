@@ -6,6 +6,8 @@ from base_interface import BaseInterface
 class HPCMTestInterface(BaseInterface):
 
     TASK_NAME = "HPCM"
+    ENV_PATH = "LIC-Models/HPCM-env"
+    WORKING_DIR = "LIC-Models/HPCM"
 
     USE_MODULE_EXECUTION = False
     EXECUTION_PATH = "test.py"  # your HPCM eval script
@@ -65,10 +67,39 @@ class HPCMTestInterface(BaseInterface):
         if self.params.get("save_dir"):
             os.makedirs(self.params["save_dir"], exist_ok=True)
 
+    def compile_extensions(self, python_exec=None):
+        """Compiles HPCM C++ arithmetic coding extension (_CXX / HT)."""
+        if not python_exec:
+            python_exec = "python3"
+            if hasattr(self, 'ENV_PATH') and self.ENV_PATH:
+                abs_env = os.path.abspath(self.ENV_PATH)
+                if os.path.isdir(os.path.join(abs_env, "bin")):
+                    python_exec = os.path.join(abs_env, "bin", "python3")
+
+        work_dir = os.path.abspath(getattr(self, 'WORKING_DIR', 'LIC-Models/HPCM'))
+        cpp_path = os.path.join(work_dir, "src", "entropy_models", "entropy_coders", "unbounded_rans")
+        print("  -> [INFO] Compiling HPCM C++ arithmetic coding extension (_CXX)...")
+        if os.path.exists(cpp_path):
+            subprocess.check_call([python_exec, "-m", "pip", "install", "--no-build-isolation", "."], cwd=cpp_path)
+
+    def _check_and_install_dependencies(self):
+        """Ensures the HPCM C++ extension (_CXX / HT) is compiled in HPCM-env."""
+        python_exec = "python3"
+        if hasattr(self, 'ENV_PATH') and self.ENV_PATH:
+            abs_env = os.path.abspath(self.ENV_PATH)
+            if os.path.isdir(os.path.join(abs_env, "bin")):
+                python_exec = os.path.join(abs_env, "bin", "python3")
+
+        try:
+            subprocess.check_call([python_exec, "-c", "import _CXX"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except subprocess.CalledProcessError:
+            self.compile_extensions(python_exec=python_exec)
+
     def execute(self):
         """
         Ensure HPCM eval compatibility before execution.
         """
+        self._check_and_install_dependencies()
 
         # -------------------------
         # checkpoint validation

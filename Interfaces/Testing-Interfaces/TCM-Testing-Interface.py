@@ -6,6 +6,8 @@ class LICTCMTestInterface(BaseInterface):
 
     TASK_NAME = "LIC-TCM"
     
+    ENV_PATH = "LIC-Models/LIC-TCM-env"
+    WORKING_DIR = "LIC-Models/LIC-TCM"
     USE_MODULE_EXECUTION = False
     
     # Fixed typo here

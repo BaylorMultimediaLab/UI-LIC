@@ -16,6 +16,9 @@ testing-training-enviornment
 # C extensions
 *.so
 
+# output folder
+results/
+
 data
 
 testing-training-env

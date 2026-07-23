@@ -15,6 +15,7 @@ class Dispatcher:
         
         self.run_train = run_train
         self.run_test = run_test
+        self.results = {"passed": [], "failed": [], "skipped": []}
 
         if not os.path.exists(self.arg_json_path):
             raise FileNotFoundError(f"Error: Argument file '{self.arg_json_path}' not found.")
@@ -211,6 +212,7 @@ class Dispatcher:
                 if target_task_name not in self.registry:
                     print(f"  -> [SKIPPED] Unknown task type: '{target_task_name}'.")
                     print(f"     (Make sure an interface file with TASK_NAME = '{target_task_name}' is loaded).")
+                    self.results["skipped"].append({"key": task_key, "name": target_task_name, "reason": "Unknown task type"})
                     continue
                 
                 clean_job_args = self._normalize_booleans(job_args)
@@ -243,14 +245,17 @@ class Dispatcher:
                 if not is_valid:
                     print(f"  -> [FAILED] Interface '{target_task_name}' is missing required arguments: {missing_args}")
                     print(f"  -> Skipping to next job...")
+                    self.results["skipped"].append({"key": task_key, "name": target_task_name, "reason": f"Missing args: {missing_args}"})
                     continue
 
                 print("  -> [VERIFIED] All required arguments present. Executing...\n")
                 try:
                     interface_instance.execute()
+                    self.results["passed"].append({"key": task_key, "name": target_task_name})
                 except Exception as e:
                     print(f"\n  -> [ERROR] Execution of '{target_task_name}' crashed: {e}")
                     print("  -> Continuing to next job in the queue...")
+                    self.results["failed"].append({"key": task_key, "name": target_task_name, "error": str(e)})
 
         # --- AUTOMATED EVALUATION STEP ---
         if phase == "testing":
@@ -280,6 +285,7 @@ class Dispatcher:
 
                     if not all([task_name, save_dir, input_dir]):
                         print(f" -> [SKIP] Evaluation task missing required fields: {job}")
+                        self.results["skipped"].append({"key": f"eval_{task_name}", "name": f"Evaluation ({task_name})", "reason": "Missing fields"})
                         continue
 
                     print(f"\n--- Evaluating Task: {task_name} ---")
@@ -296,8 +302,46 @@ class Dispatcher:
                     
                     try:
                         subprocess.run(cmd, check=True)
+                        self.results["passed"].append({"key": f"eval_{task_name}", "name": f"Evaluation ({task_name})"})
                     except subprocess.CalledProcessError as e:
                         print(f" -> [ERROR] Evaluation script failed for {task_name}: {e}")
+                        self.results["failed"].append({"key": f"eval_{task_name}", "name": f"Evaluation ({task_name})", "error": str(e)})
+
+        # Print final job summary
+        self.print_summary()
+
+    def print_summary(self):
+        print("\n" + "=" * 65)
+        print("                 JOB EXECUTION SUMMARY REPORT                 ")
+        print("=" * 65)
+        
+        total_passed = len(self.results["passed"])
+        total_failed = len(self.results["failed"])
+        total_skipped = len(self.results["skipped"])
+        total_jobs = total_passed + total_failed + total_skipped
+
+        print(f"Total Jobs Processed: {total_jobs}")
+        print(f"  - PASSED:  {total_passed}")
+        print(f"  - FAILED:  {total_failed}")
+        print(f"  - SKIPPED: {total_skipped}")
+        print("-" * 65)
+
+        if self.results["passed"]:
+            print("\nPASSED JOBS:")
+            for item in self.results["passed"]:
+                print(f"  - [{item['name']}] {item['key']}")
+
+        if self.results["failed"]:
+            print("\nFAILED JOBS:")
+            for item in self.results["failed"]:
+                print(f"  - [{item['name']}] {item['key']} | Error: {item.get('error', 'Unknown Error')}")
+
+        if self.results["skipped"]:
+            print("\nSKIPPED JOBS:")
+            for item in self.results["skipped"]:
+                print(f"  - [{item['name']}] {item['key']} | Reason: {item.get('reason', 'N/A')}")
+
+        print("=" * 65 + "\n")
 
 
 def parse_args():

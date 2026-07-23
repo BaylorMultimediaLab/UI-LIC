@@ -2,6 +2,68 @@ import subprocess
 import os
 import sys
 
+def build_model_extensions(env_path: str, requirements_file: str):
+    """
+    Automatically compile model-specific C++ / CUDA extensions after pip install.
+
+    This function scans all Testing-Interface files for classes that define a
+    compile_extensions() method, matches them to the model being installed (by
+    comparing the requirements file's parent folder name against the interface's
+    ENV_PATH, WORKING_DIR, or filename), and runs the compilation step.
+
+    This is called at the end of setup_conda_env() and update_pip_requirements()
+    so that extensions like DCVC-RT's rans or HPCM's unbounded_rans are built
+    automatically instead of requiring manual compilation.
+    """
+    # Resolve the venv's Python executable (Linux bin/ or Windows Scripts/)
+    python_exec = os.path.join(env_path, "bin", "python3")
+    if not os.path.exists(python_exec):
+        python_exec = os.path.join(env_path, "Scripts", "python.exe")
+
+    # Derive the model folder name from the requirements file path.
+    # e.g. "LIC-Models/DCVC-RT/requirements.txt" -> "dcvc-rt"
+    req_dir = os.path.dirname(os.path.abspath(requirements_file))
+    folder_name = os.path.basename(req_dir).lower()
+
+    interfaces_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "Interfaces", "Testing-Interfaces"))
+    if not os.path.exists(interfaces_dir):
+        return
+
+    import importlib.util
+
+    # Add interface directories to sys.path so base_interface imports resolve
+    sys.path.insert(0, os.path.dirname(interfaces_dir))
+    sys.path.insert(0, interfaces_dir)
+
+    for fname in os.listdir(interfaces_dir):
+        if fname.endswith(".py") and not fname.startswith("__"):
+            mod_name = fname[:-3]
+            try:
+                spec = importlib.util.spec_from_file_location(mod_name, os.path.join(interfaces_dir, fname))
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                for attr_name in dir(mod):
+                    attr = getattr(mod, attr_name)
+                    if isinstance(attr, type) and hasattr(attr, "compile_extensions"):
+                        # Match this interface class to the model being installed
+                        # by checking if the folder name appears in ENV_PATH,
+                        # WORKING_DIR, or the interface filename.
+                        env_p = getattr(attr, "ENV_PATH", "") or ""
+                        work_p = getattr(attr, "WORKING_DIR", "") or ""
+                        if folder_name and (folder_name in env_p.lower() or folder_name in work_p.lower() or folder_name in fname.lower()):
+                            try:
+                                # Use __new__ to create the instance without
+                                # calling __init__, which may raise due to
+                                # missing required args (e.g. HPCM needs
+                                # checkpoint and dataset). compile_extensions()
+                                # only needs class-level attrs like WORKING_DIR.
+                                inst = attr.__new__(attr)
+                                inst.compile_extensions(python_exec=python_exec)
+                            except Exception as e:
+                                print(f"  -> [WARNING] compile_extensions failed for {attr_name}: {e}")
+            except Exception as e:
+                print(f"  -> [WARNING] Failed to load interface module {fname}: {e}")
+
 def setup_conda_env(env_path: str, requirements_file: str, python_version: str = "3.10"):
     """
     Dynamically creates a Conda environment and installs requirements in an Ubuntu/Linux shell.
@@ -39,6 +101,9 @@ def setup_conda_env(env_path: str, requirements_file: str, python_version: str =
         
         subprocess.run(install_cmd, check=True)
         print("Dependencies installed successfully!")
+        
+        # Automate compilation of model-specific C++ / CUDA extensions
+        build_model_extensions(env_path, requirements_file)
 
     except subprocess.CalledProcessError as e:
         print(f"\n[!] A sub-process failed with exit code {e.returncode}.")
@@ -75,6 +140,7 @@ def update_pip_requirements(env_path: str, requirements_file: str):
     try:
         subprocess.run(install_cmd, check=True)
         print("Dependencies verified/installed successfully!")
+        build_model_extensions(env_path, requirements_file)
     except subprocess.CalledProcessError as e:
         print(f"[WARNING] Failed to update dependencies: {e}")
 

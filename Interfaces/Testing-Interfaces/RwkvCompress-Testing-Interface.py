@@ -6,6 +6,8 @@ from base_interface import BaseInterface
 class RwkvCompressTestInterface(BaseInterface):
 
     TASK_NAME = "RwkvCompress"
+    ENV_PATH = "LIC-Models/RwkvCompress-env"
+    WORKING_DIR = "LIC-Models/RwkvCompress"
 
     USE_MODULE_EXECUTION = False
     EXECUTION_PATH = "eval.py"

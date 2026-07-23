@@ -9,13 +9,13 @@ scipy
 timm==1.0.22
 tokenizers
 
-torch==2.1.2
+torch>=2.4.0
 torchmetrics==1.6.2
-torchvision==0.16.2
+torchvision>=0.19.0
 
 tqdm>=4.65.0
 transformers==4.46.3
-triton==2.1.0
+triton
 urllib3<1.27,>=1.25.4
 xformers>=0.0.20
 streamlit-keyup==0.2.0

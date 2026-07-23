@@ -38,6 +38,15 @@ class StableCodecInterface(BaseInterface):
         "save_dir": None,
     }
 
+    ALIASES = {
+        "checkpoint": "codec_path",
+        "ckpt": "codec_path",
+        "dataset": "test_dataset",
+        "input": "test_dataset",
+        "img_path": "test_dataset",
+        "image_path": "test_dataset",
+    }
+
     # -----------------------------
     # CLI MAPPING
     # -----------------------------
@@ -64,7 +73,7 @@ class StableCodecInterface(BaseInterface):
         # -----------------------------
         # Ensure paths are absolute relative to project root before execution CWD changes
         for key in ["sd_path", "elic_path", "codec_path", "test_dataset", "save_dir"]:
-            if self.params.get(key):
+            if self.params.get(key) and self.params[key] != "None":
                 self.params[key] = os.path.abspath(os.path.expanduser(self.params[key]))
 
         # -----------------------------

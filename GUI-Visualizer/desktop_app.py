@@ -1040,8 +1040,8 @@ class LICApp:
         standard_codecs = ["AVC", "HEVC", "AV1"]
         
         if model_name not in self.model_configs:
-            # Set workdir to LIC-Models for standard codecs, otherwise LIC-Models/Name
-            workdir_val = "LIC-Models" if model_name in standard_codecs else f"LIC-Models/{model_name}"
+            # Set workdir to LIC-Models/Standard-Codecs for standard codecs, otherwise LIC-Models/Name
+            workdir_val = "LIC-Models/Standard-Codecs" if model_name in standard_codecs else f"LIC-Models/{model_name}"
 
             self.model_configs[model_name] = {
                 "args": {},

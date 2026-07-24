@@ -218,8 +218,9 @@ void RansEncoderLib::flush()
         return;
     }
 
-    uint8_t* output = new uint8_t[total_symbol_size];  // too much space ?
-    uint8_t* ptrEnd = output + total_symbol_size;
+    int32_t alloc_size = std::max(total_symbol_size * 4 + 10000, 10000);
+    uint8_t* output = new uint8_t[alloc_size];
+    uint8_t* ptrEnd = output + alloc_size;
     uint8_t* ptr = ptrEnd;
     assert(ptr != nullptr);
 
@@ -235,6 +236,7 @@ void RansEncoderLib::flush()
 
     RansEncFlush(rans, ptr);
 
+    assert(ptr >= output);
     const int nbytes = static_cast<int>(std::distance(ptr, ptrEnd));
 
     _stream->resize(nbytes);

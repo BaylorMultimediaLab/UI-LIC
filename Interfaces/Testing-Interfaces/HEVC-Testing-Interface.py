@@ -13,8 +13,10 @@ class HEVCInterface(BaseInterface):
     Testing Interface for H.265/HEVC standard image/video compression benchmark comparisons.
     """
     TASK_NAME = "HEVC"
+    ENV_PATH = "LIC-Models/eval-env"
+    WORKING_DIR = "LIC-Models/Standard-Codecs"
     USE_MODULE_EXECUTION = False
-    EXECUTION_PATH = "Standard-Codecs/eval_standard.py"
+    EXECUTION_PATH = "eval_standard.py"
 
     REQUIRED_ARGS = ["qp", "input_dir", "save_dir"]
     ACTION_FLAGS = ["use_gpu"]

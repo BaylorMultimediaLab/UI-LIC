@@ -17,15 +17,17 @@ class StableCodec(torch.nn.Module):
 
         self.latent_tiled_size = args.latent_tiled_size
         self.latent_tiled_overlap = args.latent_tiled_overlap
+        self.use_half = getattr(args, 'half', True)
+        self._dtype = torch.float16 if self.use_half else torch.float32
 
         print("[SD-Turbo]: Building SD-Turbo ......")
         self.tokenizer = AutoTokenizer.from_pretrained(sd_path, subfolder="tokenizer")
-        self.text_encoder = CLIPTextModel.from_pretrained(sd_path, subfolder="text_encoder").cuda()
+        self.text_encoder = CLIPTextModel.from_pretrained(sd_path, subfolder="text_encoder", torch_dtype=self._dtype).cuda()
         self.sched = make_1step_sched(sd_path)
         self.guidance_scale = 1.07
 
-        vae = AutoencoderKL.from_pretrained(sd_path, subfolder="vae")
-        unet = UNet2DConditionModel.from_pretrained(sd_path, subfolder="unet")
+        vae = AutoencoderKL.from_pretrained(sd_path, subfolder="vae", torch_dtype=self._dtype)
+        unet = UNet2DConditionModel.from_pretrained(sd_path, subfolder="unet", torch_dtype=self._dtype)
 
         unet.to("cuda")
         vae.to("cuda")
@@ -34,7 +36,7 @@ class StableCodec(torch.nn.Module):
         self.text_encoder.requires_grad_(False)
 
         self._init_tiled_vae(encoder_tile_size=args.vae_encoder_tiled_size, decoder_tile_size=args.vae_decoder_tiled_size)
-        print("[SD-Turbo]: Done!")
+        print(f"[SD-Turbo]: Done! (dtype={self._dtype})")
 
         print("[LoRA]: Initializing LoRA ......")
         target_modules_vae = r"^encoder\..*(conv1|conv2|conv_in|conv_shortcut|conv|conv_out|to_k|to_q|to_v|to_out\.0)$"
@@ -71,6 +73,8 @@ class StableCodec(torch.nn.Module):
         self.codec = LatentCodec(args.lambda_rate)
         temp_layer = nn.Conv2d(320, 320, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
         self.unet.conv_in = temp_layer
+        self.codec.to(self._dtype)
+        self.unet.conv_in.to(self._dtype)
         print("[Latent Codec]: Done!")
 
         print("[Prompt]: Setting Prompt ......")
@@ -80,7 +84,7 @@ class StableCodec(torch.nn.Module):
 
         if args.codec_path is not None:
             print("[LoRA & Latent Codec & Auxiliary Decoder]: Loading Pretrained Weights ......")
-            sd = torch.load(args.codec_path, map_location="cpu")
+            sd = torch.load(args.codec_path, map_location="cpu", weights_only=False)
             _sd_codec = self.codec.state_dict()
             for k in sd["state_dict_codec"]:
                 _sd_codec[k] = sd["state_dict_codec"][k]
@@ -99,12 +103,16 @@ class StableCodec(torch.nn.Module):
 
         print("[Auxiliary Encoder]: Loading Pretrained Weights ......")
         model = ELIC()
-        checkpoint = torch.load(args.elic_path)
+        checkpoint = torch.load(args.elic_path, map_location="cpu", weights_only=False)
         model.load_state_dict(checkpoint)
         self.aux_codec = model.g_a
+        self.aux_codec.to(self._dtype).cuda()
         self.aux_codec.eval()
         self.aux_codec.requires_grad_(False)
         print("[Auxiliary Encoder]: Done!")
+
+    def _encode_latent(self, x):
+        return self.vae.encode(x.to(self._dtype)).latent_dist.mode() * self.vae.config.scaling_factor
 
     def set_prompt(self, pos_prompt):
         caption_tokens = self.tokenizer(pos_prompt, max_length=self.tokenizer.model_max_length, padding="max_length", truncation=True, return_tensors="pt").input_ids.cuda()
@@ -142,7 +150,7 @@ class StableCodec(torch.nn.Module):
             latent2 = self.aux_codec((x + 1) / 2).detach()
             pos_caption_enc = [self.pos_caption_enc for i in range(len(pos_prompt))]
             pos_caption_enc = torch.cat(pos_caption_enc, dim=0).to(x.device)
-        lq_latent = self.vae.encode(x).latent_dist.mode() * self.vae.config.scaling_factor
+        lq_latent = self._encode_latent(x)
 
         # Latent Codec
         lq_latent_hat, RateLossOutput, res1 = self.codec(lq_latent, latent2, ori_h, ori_w)
@@ -150,6 +158,7 @@ class StableCodec(torch.nn.Module):
         # One-Step Denoiser
         model_pred = self.unet(lq_latent_hat, self.timesteps, encoder_hidden_states=pos_caption_enc).sample
         x_denoised = self.sched.step(model_pred, self.timesteps, lq_latent_hat[:, :4], return_dict=True).prev_sample + res1
+        x_denoised = x_denoised.to(self._dtype)
 
         # Decoder
         output_image = (self.vae.decode(x_denoised / self.vae.config.scaling_factor).sample).clamp(-1, 1)
@@ -157,10 +166,10 @@ class StableCodec(torch.nn.Module):
         return output_image, RateLossOutput
 
     def compress(self, x):
-        
+        x = x.to(self._dtype)
         # Encoder
         latent2 = self.aux_codec((x + 1) / 2).detach()
-        lq_latent = self.vae.encode(x).latent_dist.mode() * self.vae.config.scaling_factor
+        lq_latent = self._encode_latent(x)
 
         # Latent Codec - Entropy Encoding
         output_dict = self.codec.compress(lq_latent, latent2)
@@ -246,6 +255,7 @@ class StableCodec(torch.nn.Module):
             model_pred = noise_pred
 
         x_denoised = self.sched.step(model_pred, self.timesteps, lq_latent_hat[:, :4], return_dict=True).prev_sample + res
+        x_denoised = x_denoised.to(self._dtype)
 
         # Decoder
         output_image = (self.vae.decode(x_denoised / self.vae.config.scaling_factor).sample).clamp(-1, 1)

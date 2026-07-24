@@ -7,4 +7,6 @@ pillow
 pybind11
 torch
 torchvision
-pillow
+ninja
+nvidia-cuda-nvcc~=13.0.0
+nvidia-cuda-cccl

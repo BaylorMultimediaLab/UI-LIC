@@ -5,15 +5,31 @@ import math
 import torch
 import torch.nn as nn
 from torch import Tensor
-from timm.models.layers import trunc_normal_
+try:
+    from timm.layers import trunc_normal_
+except ImportError:
+    from timm.models.layers import trunc_normal_
+
 from ELICUtilis.layers import (
     AttentionBlock,
     conv3x3,
     CheckboardMaskedConv2d,
 )
 
-from compressai.models.priors import CompressionModel, GaussianConditional
-from compressai.ops import ste_round
+from compressai.models.priors import CompressionModel
+try:
+    from compressai.entropy_models import GaussianConditional
+except ImportError:
+    from compressai.models.priors import GaussianConditional
+
+try:
+    from compressai.ops import ste_round
+except ImportError:
+    try:
+        from compressai.ops.ops import ste_round
+    except ImportError:
+        def ste_round(x: torch.Tensor) -> torch.Tensor:
+            return (torch.round(x) - x).detach() + x
 from compressai.models.utils import conv, deconv, update_registered_buffers
 
 from thop import profile
@@ -305,6 +321,7 @@ class ELIC(CompressionModel):
         }
 
     def load_state_dict(self, state_dict):
+        from compressai.models.utils import update_registered_buffers
         update_registered_buffers(
             self.gaussian_conditional,
             "gaussian_conditional",
@@ -312,6 +329,7 @@ class ELIC(CompressionModel):
             state_dict,
         )
         super().load_state_dict(state_dict)
+        self.update(force=True)
     @classmethod
     def from_state_dict(cls, state_dict):
         """Return a new model instance from `state_dict`."""

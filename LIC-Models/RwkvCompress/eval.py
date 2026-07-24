@@ -179,7 +179,7 @@ def inference_esti(model, x, fout=""):
     bpp = sum(bpp_items).item()
 
     iqa_result = {
-        key: func(out_net["x_hat"], x).item() for key, func in img_metrics.items()
+        key: func(out_net["x_hat"], x) for key, func in img_metrics.items()
     }
     org_result = {
         "enc_time": elapsed_time / 2.0,  # broad estimation

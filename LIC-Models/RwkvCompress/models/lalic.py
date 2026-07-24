@@ -22,26 +22,48 @@ from compressai.layers import (
 )
 
 
+if torch.cuda.is_available():
+    major, minor = torch.cuda.get_device_capability()
+else:
+    major, minor = 8, 6
+LIB_NAME = f"biwkv4_{major}_{minor}_v4"
+biwkv4_cuda = None
+
+
 def load_biwkv4():
     # Bi-directional WKV version 4, a form of linear attention 
     # from Vision-RWKV, https://github.com/OpenGVLab/Vision-RWKV
     # commit dee3bbe: [add] update new version of cuda code, avoid hard code of T_MAX
+    global biwkv4_cuda
+    if biwkv4_cuda is not None:
+        return biwkv4_cuda
+
     current_file_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    extra_cuda_cflags = [
+        "-res-usage",
+        "--maxrregcount 60",
+        "--use_fast_math",
+        "-O3",
+        "-Xptxas -O3",
+    ]
+    if torch.cuda.is_available():
+        target_major, target_minor = major, minor
+        if target_major >= 12:
+            target_major, target_minor = 9, 0
+        extra_cuda_cflags.append(f"-gencode arch=compute_{target_major}{target_minor},code=sm_{target_major}{target_minor}")
+        extra_cuda_cflags.append(f"-gencode arch=compute_{target_major}{target_minor},code=compute_{target_major}{target_minor}")
+    else:
+        extra_cuda_cflags.append("-gencode arch=compute_86,code=sm_86")
+
     biwkv4_cuda = load(
-        name="biwkv4",
+        name=LIB_NAME,
         sources=[
             os.path.join(current_file_dir, "cuda/biwkv4_op_new.cpp"),
             os.path.join(current_file_dir, "cuda/biwkv4_cuda_new.cu"),
         ],
         verbose=True,
-        extra_cuda_cflags=[
-            "-res-usage",
-            "--maxrregcount 60",
-            "--use_fast_math",
-            "-O3",
-            "-Xptxas -O3",
-            "-gencode arch=compute_86,code=sm_86",
-        ],
+        extra_cuda_cflags=extra_cuda_cflags,
     )
     return biwkv4_cuda
 
@@ -49,6 +71,9 @@ def load_biwkv4():
 class BiWKV4(torch.autograd.Function):
     @staticmethod
     def forward(ctx, w, u, k, v):
+        global biwkv4_cuda
+        if biwkv4_cuda is None:
+            load_biwkv4()
         half_mode = w.dtype == torch.half
         bf_mode = w.dtype == torch.bfloat16
         ctx.save_for_backward(w, u, k, v)
@@ -56,7 +81,7 @@ class BiWKV4(torch.autograd.Function):
         u = u.float().contiguous()
         k = k.float().contiguous()
         v = v.float().contiguous()
-        y = torch.ops.biwkv4.forward(w, u, k, v)
+        y = biwkv4_cuda.forward(w, u, k, v)
         if half_mode:
             y = y.half()
         elif bf_mode:
@@ -65,10 +90,13 @@ class BiWKV4(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, gy):
+        global biwkv4_cuda
+        if biwkv4_cuda is None:
+            load_biwkv4()
         w, u, k, v = ctx.saved_tensors
         half_mode = w.dtype == torch.half
         bf_mode = w.dtype == torch.bfloat16
-        gw, gu, gk, gv = torch.ops.biwkv4.backward(
+        gw, gu, gk, gv = biwkv4_cuda.backward(
             w.float().contiguous(),
             u.float().contiguous(),
             k.float().contiguous(),

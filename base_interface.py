@@ -110,6 +110,64 @@ class BaseInterface:
         run_dir = os.path.abspath(self.WORKING_DIR) if self.WORKING_DIR else os.getcwd()
         
         run_env = os.environ.copy()
+
+        # --- CUDA / JIT compilation environment setup --------------------------
+        if command and os.path.exists(command[0]):
+            bin_dir = os.path.dirname(os.path.abspath(command[0]))
+            run_env["PATH"] = f"{bin_dir}{os.pathsep}{run_env.get('PATH', '')}"
+
+            venv_root = os.path.abspath(os.path.join(bin_dir, ".."))
+            lib_dir = os.path.join(venv_root, "lib")
+            site_packages = None
+            if os.path.isdir(lib_dir):
+                python_dirs = sorted(
+                    [d for d in os.listdir(lib_dir) if d.startswith("python")],
+                    reverse=True
+                )
+                if python_dirs:
+                    site_packages = os.path.join(lib_dir, python_dirs[0], "site-packages")
+
+            if site_packages:
+                nvidia_dir = os.path.join(site_packages, "nvidia")
+                cuda_toolkit = None
+                if os.path.isdir(nvidia_dir):
+                    cu_dirs = sorted(
+                        [d for d in os.listdir(nvidia_dir)
+                         if d.startswith("cu") and d[2:].isdigit()],
+                        reverse=True
+                    )
+                    if cu_dirs:
+                        cuda_toolkit = os.path.join(nvidia_dir, cu_dirs[0])
+
+                if cuda_toolkit:
+                    nvcc_bin = os.path.join(cuda_toolkit, "bin")
+                    if os.path.isdir(nvcc_bin):
+                        run_env["PATH"] = f"{nvcc_bin}{os.pathsep}{run_env['PATH']}"
+
+                    cuda_lib = os.path.join(cuda_toolkit, "lib")
+                    if os.path.isdir(cuda_lib):
+                        try:
+                            for f in os.listdir(cuda_lib):
+                                if ".so." in f:
+                                    base_name = f.split(".so.")[0] + ".so"
+                                    so_path = os.path.join(cuda_lib, base_name)
+                                    if not os.path.exists(so_path):
+                                        os.symlink(f, so_path)
+                        except Exception:
+                            pass
+
+                    if "CUDA_HOME" not in run_env:
+                        run_env["CUDA_HOME"] = cuda_toolkit
+
+            if "CUDA_HOME" not in run_env and os.path.exists("/usr/local/cuda"):
+                run_env["CUDA_HOME"] = "/usr/local/cuda"
+
+        if "CXX" not in run_env:
+            run_env["CXX"] = "g++"
+
+        if "TORCH_CUDA_ARCH_LIST" not in run_env:
+            run_env["TORCH_CUDA_ARCH_LIST"] = "7.0;7.5;8.0;8.6;8.9;9.0"
+
         existing_pythonpath = run_env.get("PYTHONPATH", "")
         
         if existing_pythonpath:

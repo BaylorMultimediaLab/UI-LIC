@@ -246,40 +246,41 @@ class LatentCodec(CompressionModel):
 
         self.rate = TargetRateModule(lambda_rate)
 
-    def get_mask_four_parts(self, batch, channel, height, width, device='cuda'):
+    def get_mask_four_parts(self, batch, channel, height, width, device='cuda', dtype=torch.float32):
         curr_mask_str = f"{batch}_{channel}x{width}x{height}"
         if curr_mask_str not in self.masks:
-            micro_m0 = torch.tensor(((1., 0), (0, 0)), device=device)
+            micro_m0 = torch.tensor(((1., 0), (0, 0)), device=device, dtype=dtype)
             m0 = micro_m0.repeat((height + 1) // 2, (width + 1) // 2)
             m0 = m0[:height, :width]
             m0 = torch.unsqueeze(m0, 0)
             m0 = torch.unsqueeze(m0, 0)
 
-            micro_m1 = torch.tensor(((0, 1.), (0, 0)), device=device)
+            micro_m1 = torch.tensor(((0, 1.), (0, 0)), device=device, dtype=dtype)
             m1 = micro_m1.repeat((height + 1) // 2, (width + 1) // 2)
             m1 = m1[:height, :width]
             m1 = torch.unsqueeze(m1, 0)
             m1 = torch.unsqueeze(m1, 0)
 
-            micro_m2 = torch.tensor(((0, 0), (1., 0)), device=device)
+            micro_m2 = torch.tensor(((0, 0), (1., 0)), device=device, dtype=dtype)
             m2 = micro_m2.repeat((height + 1) // 2, (width + 1) // 2)
             m2 = m2[:height, :width]
             m2 = torch.unsqueeze(m2, 0)
             m2 = torch.unsqueeze(m2, 0)
 
-            micro_m3 = torch.tensor(((0, 0), (0, 1.)), device=device)
+            micro_m3 = torch.tensor(((0, 0), (0, 1.)), device=device, dtype=dtype)
             m3 = micro_m3.repeat((height + 1) // 2, (width + 1) // 2)
             m3 = m3[:height, :width]
             m3 = torch.unsqueeze(m3, 0)
             m3 = torch.unsqueeze(m3, 0)
 
-            m = torch.ones((batch, channel // 4, height, width), device=device)
+            m = torch.ones((batch, channel // 4, height, width), device=device, dtype=dtype)
             mask_0 = torch.cat((m * m0, m * m1, m * m2, m * m3), dim=1)
             mask_1 = torch.cat((m * m3, m * m2, m * m1, m * m0), dim=1)
             mask_2 = torch.cat((m * m2, m * m3, m * m0, m * m1), dim=1)
             mask_3 = torch.cat((m * m1, m * m0, m * m3, m * m2), dim=1)
             self.masks[curr_mask_str] = [mask_0, mask_1, mask_2, mask_3]
-        return self.masks[curr_mask_str]
+        masks = self.masks[curr_mask_str]
+        return masks[0].to(dtype), masks[1].to(dtype), masks[2].to(dtype), masks[3].to(dtype)
     
     def sequeeze_with_mask(self, latent, mask):
         latent_group_1, latent_group_2, latent_group_3, latent_group_4 = latent.chunk(4, 1)
@@ -301,7 +302,7 @@ class LatentCodec(CompressionModel):
         symbols_list.extend(latent_squeeze_hat.reshape(-1).tolist())
         indexes_list.extend(indexes.reshape(-1).tolist())
         latent_hat = self.unsequeeze_with_mask(latent_squeeze_hat + means_squeeze, mask)
-        return latent_hat
+        return latent_hat.to(means.dtype)
     
     def decompress_group_with_mask(self, gaussian_conditional, scales, means, mask, decoder, cdf, cdf_lengths, offsets):
         scales_squeeze = self.sequeeze_with_mask(scales, mask)
@@ -310,7 +311,7 @@ class LatentCodec(CompressionModel):
         latent_squeeze_hat = decoder.decode_stream(indexes.reshape(-1).tolist(), cdf, cdf_lengths, offsets)
         latent_squeeze_hat = torch.Tensor(latent_squeeze_hat).reshape(scales_squeeze.shape).to(scales.device)
         latent_hat = self.unsequeeze_with_mask(latent_squeeze_hat + means_squeeze, mask)
-        return latent_hat
+        return latent_hat.to(means.dtype)
 
     def forward(self, latent, latent2, ori_h, ori_w):
 
@@ -325,7 +326,7 @@ class LatentCodec(CompressionModel):
         z_hat = ste_round(z - z_offset) + z_offset
 
         B, C, H, W = y.shape
-        mask_0, mask_1, mask_2, mask_3 = self.get_mask_four_parts(B, C, H, W, device=y.device)
+        mask_0, mask_1, mask_2, mask_3 = self.get_mask_four_parts(B, C, H, W, device=y.device, dtype=y.dtype)
 
         # Hyper-parameters
         base = self.h_s(z_hat)
@@ -408,7 +409,7 @@ class LatentCodec(CompressionModel):
         y_strings = []
 
         B, C, H, W = y.shape
-        mask_0, mask_1, mask_2, mask_3 = self.get_mask_four_parts(B, C, H, W, device=y.device)
+        mask_0, mask_1, mask_2, mask_3 = self.get_mask_four_parts(B, C, H, W, device=y.device, dtype=y.dtype)
 
         base = self.h_s(z_hat)
         means_0_supp, scales_0_supp = self.adapter_out[0](self.g_c(self.adapter_in[0](base))).chunk(2, 1)
@@ -452,6 +453,7 @@ class LatentCodec(CompressionModel):
         y_strings = strings[0][0]
         z_strings = strings[1]
         z_hat = self.entropy_bottleneck.decompress(z_strings, shape)
+        z_hat = z_hat.to(next(self.parameters()).dtype)
 
         cdf = self.gaussian_conditional.quantized_cdf.tolist()
         cdf_lengths = self.gaussian_conditional.cdf_length.reshape(-1).int().tolist()
@@ -460,7 +462,7 @@ class LatentCodec(CompressionModel):
         decoder.set_stream(y_strings)
 
         B, C, H, W = z_hat.shape
-        mask_0, mask_1, mask_2, mask_3 = self.get_mask_four_parts(B, C * 2, H * 4, W * 4, device=z_hat.device)
+        mask_0, mask_1, mask_2, mask_3 = self.get_mask_four_parts(B, C * 2, H * 4, W * 4, device=z_hat.device, dtype=z_hat.dtype)
 
         base = self.h_s(z_hat)
         means_0_supp, scales_0_supp = self.adapter_out[0](self.g_c(self.adapter_in[0](base))).chunk(2, 1)

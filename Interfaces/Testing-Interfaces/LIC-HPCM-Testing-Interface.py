@@ -64,6 +64,14 @@ class HPCMTestInterface(BaseInterface):
         if not self.params.get("checkpoint"):
             raise ValueError("checkpoint is required")
 
+        # Always align model_name with checkpoint filename (HPCM_Large vs HPCM_Base)
+        ckpt = self.params["checkpoint"]
+        ckpt_str = str(ckpt[0] if isinstance(ckpt, list) and ckpt else ckpt).lower()
+        if "large" in ckpt_str:
+            self.params["model_name"] = "HPCM_Large"
+        elif "base" in ckpt_str:
+            self.params["model_name"] = "HPCM_Base"
+
         if self.params.get("save_dir"):
             os.makedirs(self.params["save_dir"], exist_ok=True)
 
@@ -76,11 +84,50 @@ class HPCMTestInterface(BaseInterface):
                 if os.path.isdir(os.path.join(abs_env, "bin")):
                     python_exec = os.path.join(abs_env, "bin", "python3")
 
+        env = os.environ.copy()
+        bin_dir = os.path.dirname(os.path.abspath(python_exec))
+        venv_root = os.path.abspath(os.path.join(bin_dir, ".."))
+        env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
+
+        lib_dir = os.path.join(venv_root, "lib")
+        if os.path.isdir(lib_dir):
+            python_dirs = sorted([d for d in os.listdir(lib_dir) if d.startswith("python")], reverse=True)
+            if python_dirs:
+                site_packages = os.path.join(lib_dir, python_dirs[0], "site-packages")
+                nvidia_dir = os.path.join(site_packages, "nvidia")
+                if os.path.isdir(nvidia_dir):
+                    cu_dirs = sorted([d for d in os.listdir(nvidia_dir) if d.startswith("cu") and d[2:].isdigit()], reverse=True)
+                    if cu_dirs:
+                        cuda_toolkit = os.path.join(nvidia_dir, cu_dirs[0])
+                        nvcc_bin = os.path.join(cuda_toolkit, "bin")
+                        if os.path.isdir(nvcc_bin):
+                            env["PATH"] = f"{nvcc_bin}{os.pathsep}{env['PATH']}"
+                        cuda_lib = os.path.join(cuda_toolkit, "lib")
+                        if os.path.isdir(cuda_lib):
+                            for f in os.listdir(cuda_lib):
+                                if ".so." in f:
+                                    base_name = f.split(".so.")[0] + ".so"
+                                    so_path = os.path.join(cuda_lib, base_name)
+                                    if not os.path.exists(so_path):
+                                        try:
+                                            os.symlink(f, so_path)
+                                        except Exception:
+                                            pass
+                        if "CUDA_HOME" not in env:
+                            env["CUDA_HOME"] = cuda_toolkit
+
+        if "CUDA_HOME" not in env and os.path.exists("/usr/local/cuda"):
+            env["CUDA_HOME"] = "/usr/local/cuda"
+        if "CXX" not in env:
+            env["CXX"] = "g++"
+        if "TORCH_CUDA_ARCH_LIST" not in env:
+            env["TORCH_CUDA_ARCH_LIST"] = "7.0;7.5;8.0;8.6;8.9;9.0"
+
         work_dir = os.path.abspath(getattr(self, 'WORKING_DIR', 'LIC-Models/HPCM'))
         cpp_path = os.path.join(work_dir, "src", "entropy_models", "entropy_coders", "unbounded_rans")
         print("  -> [INFO] Compiling HPCM C++ arithmetic coding extension (_CXX)...")
         if os.path.exists(cpp_path):
-            subprocess.check_call([python_exec, "-m", "pip", "install", "--no-build-isolation", "."], cwd=cpp_path)
+            subprocess.check_call([python_exec, "-m", "pip", "install", "--no-build-isolation", "."], cwd=cpp_path, env=env)
 
     def _check_and_install_dependencies(self):
         """Ensures the HPCM C++ extension (_CXX / HT) is compiled in HPCM-env."""

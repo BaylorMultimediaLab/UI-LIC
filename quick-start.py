@@ -250,7 +250,7 @@ def main():
         models = [
             {"name": "DCVC-RT", "python": "3.12", "req": "LIC-Models/DCVC-RT/requirements.txt"},
             {"name": "ELIC", "python": "3.10", "req": "LIC-Models/ELIC/requirements.txt"},
-            {"name": "HPCM", "python": "3.8", "req": "LIC-Models/HPCM/requirements.txt"},
+            {"name": "HPCM", "python": "3.10", "req": "LIC-Models/HPCM/requirements.txt"},
             {"name": "LIC-TCM", "python": "3.10", "req": "LIC-Models/LIC-TCM/requirements.txt"},
             {"name": "RwkvCompress", "python": "3.10", "req": "LIC-Models/RwkvCompress/requirements.txt"},
             {"name": "StableCodec", "python": "3.10", "req": "LIC-Models/StableCodec/requirements.txt"},

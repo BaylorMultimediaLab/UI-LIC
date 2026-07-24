@@ -1,3 +1,11 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - Environment Setup Utility
+
+This script provides automated creation and updating of isolated Conda environments for individual LIC models.
+It creates Python environments at specified target directories (`--prefix`) and installs model-specific dependencies
+from `requirements.txt` files to avoid library version conflicts between different research codebases.
+"""
+
 import subprocess
 import os
 import sys
@@ -128,7 +136,7 @@ def setup_conda_env(env_path: str, requirements_file: str, python_version: str =
 
     print(f"Creating Conda environment at: {env_path} (Python {python_version})")
     
-    # Explicitly include pip and C++ compiler toolchain (on Linux) to ensure pybind11/C++ extensions compile cleanly
+    # Explicitly include pip and C++ compiler toolchain (on Linux) to ensure pybind11/C++ extensions compile cleanly and isolate packages
     create_cmd = [
         "conda", "create",
         "--prefix", env_path,

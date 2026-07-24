@@ -1,7 +1,17 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - ELIC Training Interface
+
+This interface maps UI-LIC training configuration parameters to ELIC's training script (`train.py`),
+handling learning rates, rate-distortion lambda values, patch sizes, and target checkpoint directories.
+"""
+
 from base_interface import BaseInterface
 import os
 
 class ELICTrainInterface(BaseInterface):
+    """
+    Training Interface for ELIC (Efficient Learned Image Compression) training tasks.
+    """
 
     TASK_NAME = "ELIC"
     

@@ -1,3 +1,12 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - Interactive Job Configuration Generator
+
+This script provides an interactive CLI tool (`configure-jobs.py`) for generating structured JSON configuration files
+(`arguments.json`) used by `dispatcher.py`. It dynamically scans the `Interfaces/` directory to discover registered
+model interfaces, prompts researchers for global and model-specific execution parameters, handles argument aliases,
+and generates validated job execution queues for training and testing.
+"""
+
 import os
 import sys
 import json
@@ -6,10 +15,16 @@ import argparse
 import importlib.util
 
 class ConfigGenerator:
+    """
+    Interactive job configuration builder.
+    
+    Dynamically loads interface classes from disk using importlib, tracks previously entered
+    arguments to reuse as smart defaults across tasks, and formats valid job configuration files.
+    """
     def __init__(self, train_interfaces_path, test_interfaces_path, train_mode=False, test_mode=False):
         self.train_registry = {}
         self.test_registry = {}
-        self.known_args = {}  # Tracks previously entered arguments to use as defaults
+        self.known_args = {}  # Tracks previously entered arguments to use as defaults across multiple tasks
         
         self.train_mode = train_mode
         self.test_mode = test_mode
@@ -20,6 +35,10 @@ class ConfigGenerator:
             self._load_interfaces_from_dir(test_interfaces_path, self.test_registry, "Test")
 
     def _load_interfaces_from_dir(self, directory, registry, category):
+        """
+        Dynamically imports Python files from the interface directory without needing a hardcoded package manifest.
+        Inspects imported modules for classes exposing a valid TASK_NAME attribute to populate the model registry.
+        """
         if not os.path.isdir(directory):
             print(f"[WARNING] {category} interface directory not found: {directory}")
             return

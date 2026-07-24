@@ -1,7 +1,17 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - ELIC Testing Interface
+
+This interface maps UI-LIC configuration parameters to the ELIC inference script (`Inference.py`),
+handling parameter translations (e.g., `--output_path`, `--path`), path expansions, and execution options.
+"""
+
 import os
 from base_interface import BaseInterface
 
 class LICELICTestInterface(BaseInterface):
+    """
+    Testing Interface for ELIC (Efficient Learned Image Compression) evaluation.
+    """
 
     TASK_NAME = "ELIC"
     

@@ -1,7 +1,17 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - AVC (H.264) Testing Interface
+
+This interface maps UI-LIC evaluation parameters (QP quality parameter, input/output paths) to the standard video
+codec evaluation runner (`Standard-Codecs/eval_standard.py`) for the H.264/AVC codec format.
+"""
+
 import os
 from base_interface import BaseInterface
 
 class AVCInterface(BaseInterface):
+    """
+    Testing Interface for H.264/AVC standard image/video compression benchmark comparisons.
+    """
     TASK_NAME = "AVC"
     ENV_PATH = "LIC-Models/eval-env"
     WORKING_DIR = "LIC-Models/Standard-Codecs"

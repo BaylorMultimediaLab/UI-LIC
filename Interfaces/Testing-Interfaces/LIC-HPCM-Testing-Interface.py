@@ -1,9 +1,19 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - LIC-HPCM Testing Interface
+
+This interface maps UI-LIC configuration parameters to HPCM's testing script (`test.py`), supporting both HPCM_Base
+and HPCM_Large architecture variants and unifying output directory paths for metric calculations.
+"""
+
 import os
 import subprocess
 from base_interface import BaseInterface
 
 
 class HPCMTestInterface(BaseInterface):
+    """
+    Testing Interface for LIC-HPCM (Hierarchical Progressive Context Modeling) evaluation.
+    """
 
     TASK_NAME = "HPCM"
     ENV_PATH = "LIC-Models/HPCM-env"

@@ -1,7 +1,17 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - HEVC (H.265) Testing Interface
+
+This interface maps UI-LIC evaluation parameters (QP quality parameter, input/output paths) to the standard video
+codec evaluation runner (`Standard-Codecs/eval_standard.py`) for the H.265/HEVC codec format.
+"""
+
 import os
 from base_interface import BaseInterface
 
 class HEVCInterface(BaseInterface):
+    """
+    Testing Interface for H.265/HEVC standard image/video compression benchmark comparisons.
+    """
     TASK_NAME = "HEVC"
     ENV_PATH = "LIC-Models/eval-env"
     WORKING_DIR = "LIC-Models/Standard-Codecs"

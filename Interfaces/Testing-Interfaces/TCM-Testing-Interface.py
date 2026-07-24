@@ -1,8 +1,19 @@
+"""
+Unified Interface For Learned Image Compression (UI-LIC) - LIC-TCM Testing Interface
+
+This interface maps UI-LIC configuration parameters to LIC-TCM's custom evaluation script (`custom-evaluation.py`).
+It handles architecture flags (N=128 for Large variant, N=64 for Small variant; M=320), bitstream generation flags,
+and dataset/save path resolution.
+"""
+
 import os
 import subprocess
 from base_interface import BaseInterface
 
 class LICTCMTestInterface(BaseInterface):
+    """
+    Testing Interface for LIC-TCM (Transformer-CNN image compression) evaluation.
+    """
 
     TASK_NAME = "LIC-TCM"
     

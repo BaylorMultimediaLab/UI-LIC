@@ -8,4 +8,5 @@ pybind11
 torch
 torchvision
 ninja
-nvidia-cuda-nvcc
+nvidia-cuda-nvcc~=13.0.0
+nvidia-cuda-cccl

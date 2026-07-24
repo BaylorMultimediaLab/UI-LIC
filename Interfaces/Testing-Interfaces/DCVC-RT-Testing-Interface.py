@@ -5,6 +5,8 @@ from base_interface import BaseInterface
 class DCVCRTImageTestInterface(BaseInterface):
 
     TASK_NAME = "DCVC-RT"
+    ENV_PATH = "LIC-Models/DCVC-RT-env"
+    WORKING_DIR = "LIC-Models/DCVC-RT"
     
     USE_MODULE_EXECUTION = False
     EXECUTION_PATH = "Testing/test_image_encoding.py"
@@ -77,17 +79,56 @@ class DCVCRTImageTestInterface(BaseInterface):
                 if os.path.isdir(os.path.join(abs_env, "bin")):
                     python_exec = os.path.join(abs_env, "bin", "python3")
 
+        env = os.environ.copy()
+        bin_dir = os.path.dirname(os.path.abspath(python_exec))
+        venv_root = os.path.abspath(os.path.join(bin_dir, ".."))
+        env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
+
+        lib_dir = os.path.join(venv_root, "lib")
+        if os.path.isdir(lib_dir):
+            python_dirs = sorted([d for d in os.listdir(lib_dir) if d.startswith("python")], reverse=True)
+            if python_dirs:
+                site_packages = os.path.join(lib_dir, python_dirs[0], "site-packages")
+                nvidia_dir = os.path.join(site_packages, "nvidia")
+                if os.path.isdir(nvidia_dir):
+                    cu_dirs = sorted([d for d in os.listdir(nvidia_dir) if d.startswith("cu") and d[2:].isdigit()], reverse=True)
+                    if cu_dirs:
+                        cuda_toolkit = os.path.join(nvidia_dir, cu_dirs[0])
+                        nvcc_bin = os.path.join(cuda_toolkit, "bin")
+                        if os.path.isdir(nvcc_bin):
+                            env["PATH"] = f"{nvcc_bin}{os.pathsep}{env['PATH']}"
+                        cuda_lib = os.path.join(cuda_toolkit, "lib")
+                        if os.path.isdir(cuda_lib):
+                            for f in os.listdir(cuda_lib):
+                                if ".so." in f:
+                                    base_name = f.split(".so.")[0] + ".so"
+                                    so_path = os.path.join(cuda_lib, base_name)
+                                    if not os.path.exists(so_path):
+                                        try:
+                                            os.symlink(f, so_path)
+                                        except Exception:
+                                            pass
+                        if "CUDA_HOME" not in env:
+                            env["CUDA_HOME"] = cuda_toolkit
+
+        if "CUDA_HOME" not in env and os.path.exists("/usr/local/cuda"):
+            env["CUDA_HOME"] = "/usr/local/cuda"
+        if "CXX" not in env:
+            env["CXX"] = "g++"
+        if "TORCH_CUDA_ARCH_LIST" not in env:
+            env["TORCH_CUDA_ARCH_LIST"] = "7.0;7.5;8.0;8.6;8.9;9.0"
+
         work_dir = os.path.abspath(getattr(self, 'WORKING_DIR', 'LIC-Models/DCVC-RT'))
         cpp_path = os.path.join(work_dir, "src", "cpp")
         cuda_path = os.path.join(work_dir, "src", "layers", "extensions", "inference")
 
         print("  -> Compiling C++ entropy coding extensions (this may take a minute)...")
         if os.path.exists(cpp_path):
-            subprocess.check_call([python_exec, "-m", "pip", "install", "--no-build-isolation", "."], cwd=cpp_path)
+            subprocess.check_call([python_exec, "-m", "pip", "install", "--no-build-isolation", "."], cwd=cpp_path, env=env)
 
         print("  -> Compiling CUDA inference kernels...")
         if os.path.exists(cuda_path):
-            subprocess.check_call([python_exec, "-m", "pip", "install", "--no-build-isolation", "."], cwd=cuda_path)
+            subprocess.check_call([python_exec, "-m", "pip", "install", "--no-build-isolation", "."], cwd=cuda_path, env=env)
 
     def _check_and_install_dependencies(self):
         """Checks the target ENV_PATH for required packages and prompts installation if missing."""
@@ -106,25 +147,15 @@ class DCVCRTImageTestInterface(BaseInterface):
                 missing_standard.append(pip_name)
                 
         if missing_standard:
-            print(f"\n  -> [WARNING] Missing standard packages: {', '.join(missing_standard)}")
-            choice = input(f"  -> Would you like to install them now? (y/N): ").strip().lower()
-            if choice == 'y':
-                subprocess.check_call([python_exec, "-m", "pip", "install", *missing_standard])
-            else:
-                print("  -> Proceeding anyway, but execution will likely fail.")
+            print(f"\n  -> [INFO] Auto-installing missing standard packages: {', '.join(missing_standard)}")
+            subprocess.check_call([python_exec, "-m", "pip", "install", *missing_standard])
 
         # 2. Check Custom Extensions
         try:
             subprocess.check_call([python_exec, "-c", "import MLCodec_extensions_cpp"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError:
-            print("\n  -> [WARNING] Missing custom extension: 'MLCodec_extensions_cpp'")
-            print("  -> DCVC-RT requires custom C++ and CUDA extensions to be compiled locally.")
-            choice = input("  -> Would you like to compile and install them automatically now? (y/N): ").strip().lower()
-            
-            if choice == 'y':
-                self.compile_extensions(python_exec=python_exec)
-            else:
-                print("  -> Proceeding anyway, but execution will likely fail.")
+            print("\n  -> [INFO] Missing custom extension 'MLCodec_extensions_cpp'. Compiling extensions automatically...")
+            self.compile_extensions(python_exec=python_exec)
 
     def execute(self):
         """Overrides the base execute to ensure dependencies exist before running."""

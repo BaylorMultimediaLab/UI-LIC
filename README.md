@@ -9,7 +9,7 @@ This repository provides a unified framework for managing, training, and testing
 ## Core Workflow
 
 ### 1. Environment Setup
-**Note:** This repository targets Linux-based systems with an NVIDIA GPU. We tested primarily on Ubuntu 24.04. If you run into issues on your operating system (especially with the automatic setup and GUI commands), please file an issue on our GitHub page.
+**Note:** This repository targets Linux-based systems with an NVIDIA GPU. We tested primarily on Ubuntu 24.04 and WSL2 across RTX 30-series, 40-series, and 50-series GPUs. If you run into issues on your operating system (especially with the automatic setup and GUI commands), please file an issue on our GitHub page. Automatic environment setup handles C++ compiler toolchains (`gxx_linux-64`), CUDA shared libraries, and hardware compatibility flags out of the box.
 
 #### System Prerequisites
 Before setting up your virtual environments, ensure your system has the necessary external libraries and tools installed.
@@ -164,7 +164,7 @@ The following models are integrated into the platform, each with a specialized i
 
 ### **LIC-HPCM**
 *Learned Image Compression with Hierarchical Progressive Context Modeling*
-- **Recommended Python Version:** 3.8
+- **Recommended Python Version:** 3.10
 - **Strength:** Optimized for hardware acceleration and fast parallel decoding.
 
 ### **RwkvCompress**

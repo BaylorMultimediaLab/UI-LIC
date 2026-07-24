@@ -202,6 +202,19 @@ class BaseInterface:
                     if os.path.isdir(nvcc_bin):
                         run_env["PATH"] = f"{nvcc_bin}{os.pathsep}{run_env['PATH']}"
 
+                    # Ensure unversioned .so symlinks exist in nvidia lib/ (e.g. libcudart.so -> libcudart.so.13)
+                    cuda_lib = os.path.join(cuda_toolkit, "lib")
+                    if os.path.isdir(cuda_lib):
+                        try:
+                            for f in os.listdir(cuda_lib):
+                                if ".so." in f:
+                                    base_name = f.split(".so.")[0] + ".so"
+                                    so_path = os.path.join(cuda_lib, base_name)
+                                    if not os.path.exists(so_path):
+                                        os.symlink(f, so_path)
+                        except Exception:
+                            pass
+
                     # Set CUDA_HOME so PyTorch's JIT compiler can find headers/libs
                     if "CUDA_HOME" not in run_env:
                         run_env["CUDA_HOME"] = cuda_toolkit
@@ -209,6 +222,12 @@ class BaseInterface:
             # Fallback: use system CUDA if no pip-installed toolkit was found
             if "CUDA_HOME" not in run_env and os.path.exists("/usr/local/cuda"):
                 run_env["CUDA_HOME"] = "/usr/local/cuda"
+
+        if "CXX" not in run_env:
+            run_env["CXX"] = "g++"
+
+        if "TORCH_CUDA_ARCH_LIST" not in run_env:
+            run_env["TORCH_CUDA_ARCH_LIST"] = "7.0;7.5;8.0;8.6;8.9;9.0"
 
         # --- PYTHONPATH setup --------------------------------------------------
         # Prepend the working directory so relative imports within the model's

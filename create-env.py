@@ -15,10 +15,57 @@ def build_model_extensions(env_path: str, requirements_file: str):
     so that extensions like DCVC-RT's rans or HPCM's unbounded_rans are built
     automatically instead of requiring manual compilation.
     """
+    env_path = os.path.abspath(os.path.expanduser(env_path))
+
+    # Auto-repair existing/legacy Conda environments missing the C++ compiler toolchain on Linux
+    if sys.platform.startswith("linux"):
+        gxx_bin = os.path.join(env_path, "bin", "x86_64-conda-linux-gnu-g++")
+        if not os.path.exists(gxx_bin):
+            print("Installing C++ compiler toolchain (gxx_linux-64) to ensure pybind11 compatibility...")
+            try:
+                subprocess.run([
+                    "conda", "install",
+                    "--prefix", env_path,
+                    "-c", "conda-forge",
+                    "gxx_linux-64", "sysroot_linux-64",
+                    "-y"
+                ], check=True)
+            except subprocess.CalledProcessError as e:
+                print(f"[WARNING] Could not auto-install gxx_linux-64: {e}")
+
+    # Set CUDA_HOME, CXX, and TORCH_CUDA_ARCH_LIST environment variables if missing
+    if "CUDA_HOME" not in os.environ and os.path.exists("/usr/local/cuda"):
+        os.environ["CUDA_HOME"] = "/usr/local/cuda"
+    if "CXX" not in os.environ:
+        os.environ["CXX"] = "g++"
+    if "TORCH_CUDA_ARCH_LIST" not in os.environ:
+        os.environ["TORCH_CUDA_ARCH_LIST"] = "7.0;7.5;8.0;8.6;8.9;9.0"
+
     # Resolve the venv's Python executable (Linux bin/ or Windows Scripts/)
     python_exec = os.path.join(env_path, "bin", "python3")
     if not os.path.exists(python_exec):
         python_exec = os.path.join(env_path, "Scripts", "python.exe")
+
+    # Auto-create unversioned .so symlinks in site-packages/nvidia (e.g. libcudart.so -> libcudart.so.13)
+    bin_dir = os.path.dirname(os.path.abspath(python_exec))
+    venv_root = os.path.abspath(os.path.join(bin_dir, ".."))
+    lib_dir = os.path.join(venv_root, "lib")
+    if os.path.isdir(lib_dir):
+        python_dirs = sorted([d for d in os.listdir(lib_dir) if d.startswith("python")], reverse=True)
+        if python_dirs:
+            site_packages = os.path.join(lib_dir, python_dirs[0], "site-packages")
+            nvidia_dir = os.path.join(site_packages, "nvidia")
+            if os.path.isdir(nvidia_dir):
+                for root, dirs, files in os.walk(nvidia_dir):
+                    for f in files:
+                        if ".so." in f:
+                            base_name = f.split(".so.")[0] + ".so"
+                            so_path = os.path.join(root, base_name)
+                            if not os.path.exists(so_path):
+                                try:
+                                    os.symlink(f, so_path)
+                                except Exception:
+                                    pass
 
     # Derive the model folder name from the requirements file path.
     # e.g. "LIC-Models/DCVC-RT/requirements.txt" -> "dcvc-rt"
@@ -66,7 +113,10 @@ def build_model_extensions(env_path: str, requirements_file: str):
 
 def setup_conda_env(env_path: str, requirements_file: str, python_version: str = "3.10"):
     """
-    Dynamically creates a Conda environment and installs requirements in an Ubuntu/Linux shell.
+    Dynamically creates a Conda environment at a specified path prefix and installs requirements.
+    
+    Using --prefix ensures environments are stored cleanly within specified project paths rather
+    than global conda environment directories.
     """
     # Expand tildes (~) if the user references their Linux home directory
     env_path = os.path.abspath(os.path.expanduser(env_path))
@@ -78,14 +128,17 @@ def setup_conda_env(env_path: str, requirements_file: str, python_version: str =
 
     print(f"Creating Conda environment at: {env_path} (Python {python_version})")
     
-    # Explicitly include pip to keep it isolated to this environment prefix
+    # Explicitly include pip and C++ compiler toolchain (on Linux) to ensure pybind11/C++ extensions compile cleanly
     create_cmd = [
         "conda", "create",
         "--prefix", env_path,
+        "-c", "conda-forge",
+        "-y",
         f"python={python_version}",
-        "pip", 
-        "-y"
+        "pip"
     ]
+    if sys.platform.startswith("linux"):
+        create_cmd.extend(["gxx_linux-64", "sysroot_linux-64"])
 
     try:
         print("Running environment creation...")
@@ -130,6 +183,23 @@ def update_pip_requirements(env_path: str, requirements_file: str):
         return
 
     print(f"Ensuring dependencies from {requirements_file} in {env_path}...")
+    
+    # Auto-repair existing/legacy Conda environments missing the C++ compiler toolchain on Linux
+    if sys.platform.startswith("linux"):
+        gxx_bin = os.path.join(env_path, "bin", "x86_64-conda-linux-gnu-g++")
+        if not os.path.exists(gxx_bin):
+            print("Installing C++ compiler toolchain (gxx_linux-64) to ensure pybind11 compatibility...")
+            try:
+                subprocess.run([
+                    "conda", "install",
+                    "--prefix", env_path,
+                    "-c", "conda-forge",
+                    "gxx_linux-64", "sysroot_linux-64",
+                    "-y"
+                ], check=True)
+            except subprocess.CalledProcessError as e:
+                print(f"[WARNING] Could not auto-install gxx_linux-64: {e}")
+
     # Using 'python -m pip' instead of 'pip' command bypasses broken shebangs in env/bin/pip
     install_cmd = [
         "conda", "run",

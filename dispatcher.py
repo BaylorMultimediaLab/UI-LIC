@@ -217,6 +217,9 @@ class Dispatcher:
             clean_global_args = self._normalize_booleans(global_args)
             clean_global_args = self._expand_paths(clean_global_args)
 
+            failed_tasks = {}
+            failed_eval_tasks = []
+
             for step, (task_key, task_info) in enumerate(tasks.items(), start=1):
                 print(f"\n--- [Phase: {phase.upper()}] Step {step}/{len(tasks)}: Starting {task_key} ---")
                 
@@ -229,6 +232,7 @@ class Dispatcher:
                     print(f"  -> [SKIPPED] Unknown task type: '{target_task_name}'.")
                     print(f"     (Make sure an interface file with TASK_NAME = '{target_task_name}' is loaded).")
                     self.results["skipped"].append({"key": task_key, "name": target_task_name, "reason": "Unknown task type"})
+                    failed_tasks[task_key] = task_info
                     continue
                 
                 clean_job_args = self._normalize_booleans(job_args)
@@ -262,6 +266,7 @@ class Dispatcher:
                     print(f"  -> [FAILED] Interface '{target_task_name}' is missing required arguments: {missing_args}")
                     print(f"  -> Skipping to next job...")
                     self.results["skipped"].append({"key": task_key, "name": target_task_name, "reason": f"Missing args: {missing_args}"})
+                    failed_tasks[task_key] = task_info
                     continue
 
                 print("  -> [VERIFIED] All required arguments present. Executing...\n")
@@ -272,6 +277,7 @@ class Dispatcher:
                     print(f"\n  -> [ERROR] Execution of '{target_task_name}' crashed: {e}")
                     print("  -> Continuing to next job in the queue...")
                     self.results["failed"].append({"key": task_key, "name": target_task_name, "error": str(e)})
+                    failed_tasks[task_key] = task_info
 
         # --- AUTOMATED EVALUATION STEP ---
         if phase == "testing":
@@ -302,6 +308,7 @@ class Dispatcher:
                     if not all([task_name, save_dir, input_dir]):
                         print(f" -> [SKIP] Evaluation task missing required fields: {job}")
                         self.results["skipped"].append({"key": f"eval_{task_name}", "name": f"Evaluation ({task_name})", "reason": "Missing fields"})
+                        failed_eval_tasks.append(job)
                         continue
 
                     print(f"\n--- Evaluating Task: {task_name} ---")
@@ -322,6 +329,36 @@ class Dispatcher:
                     except subprocess.CalledProcessError as e:
                         print(f" -> [ERROR] Evaluation script failed for {task_name}: {e}")
                         self.results["failed"].append({"key": f"eval_{task_name}", "name": f"Evaluation ({task_name})", "error": str(e)})
+                        failed_eval_tasks.append(job)
+
+        # Save failed runs JSON if any jobs failed or were skipped due to error
+        if failed_tasks or failed_eval_tasks:
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            failed_filename = f"failed_run_{timestamp}.json"
+            
+            failed_payload = {
+                phase: {
+                    "global_arguments": clean_global_args
+                }
+            }
+            if failed_tasks:
+                failed_payload[phase]["tasks"] = failed_tasks
+            if failed_eval_tasks:
+                failed_payload[phase]["evaluation"] = {
+                    "env_path": eval_data.get("env_path", "LIC-Models/eval-env"),
+                    "use_vmaf": eval_data.get("use_vmaf", False),
+                    "tasks": failed_eval_tasks
+                }
+
+            with open(failed_filename, "w") as f:
+                json.dump(failed_payload, f, indent=4)
+            
+            print("\n" + "!" * 65)
+            print(f"[FAILED RUNS EXPORTED] Saved {len(failed_tasks)} failed task(s) to:")
+            print(f"  -> {os.path.abspath(failed_filename)}")
+            print("  Re-run only failed tasks with command:")
+            print(f"     python dispatcher.py --{phase[:4]} --args_json {failed_filename}")
+            print("!" * 65)
 
         # Print final job summary
         self.print_summary()

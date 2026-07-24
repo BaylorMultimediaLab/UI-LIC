@@ -48,8 +48,11 @@ def load_biwkv4():
         "-Xptxas -O3",
     ]
     if torch.cuda.is_available():
-        extra_cuda_cflags.append(f"-gencode arch=compute_{major}{minor},code=sm_{major}{minor}")
-        extra_cuda_cflags.append(f"-gencode arch=compute_{major}{minor},code=compute_{major}{minor}")
+        target_major, target_minor = major, minor
+        if target_major >= 12:
+            target_major, target_minor = 9, 0
+        extra_cuda_cflags.append(f"-gencode arch=compute_{target_major}{target_minor},code=sm_{target_major}{target_minor}")
+        extra_cuda_cflags.append(f"-gencode arch=compute_{target_major}{target_minor},code=compute_{target_major}{target_minor}")
     else:
         extra_cuda_cflags.append("-gencode arch=compute_86,code=sm_86")
 

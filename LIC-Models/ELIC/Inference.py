@@ -90,8 +90,23 @@ def inference(model, x, f, outputpath, patch):
     out_enc = model.compress(x_padded)
     enc_time = time.time() - start
 
-    # Save bitstreams
-    torch.save(out_enc["strings"], bit_path)
+    # Save bitstreams as raw binary payload (eliminates PyTorch object wrapper overhead)
+    raw_payload = bytearray()
+    for s in out_enc["strings"]:
+        for j in s:
+            if isinstance(j, list):
+                for i in j:
+                    if isinstance(i, list):
+                        for k in i:
+                            raw_payload.extend(k)
+                    else:
+                        raw_payload.extend(i)
+            else:
+                raw_payload.extend(j)
+
+    bit_path = os.path.join(bits_dir, f"{base_name}.bin")
+    with open(bit_path, "wb") as f_bin:
+        f_bin.write(raw_payload)
 
     start = time.time()
     out_dec = model.decompress(out_enc["strings"], out_enc["shape"])

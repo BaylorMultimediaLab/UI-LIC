@@ -408,7 +408,8 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results,
                 if use_log_y_scale:
                     ax.set_ylim(bottom=y_min * 0.98, top=y_max * 1.02)
                 else:
-                    ax.set_ylim(bottom=max(0, y_min - y_span * 0.05), top=y_max + y_span * 0.04)
+                    top_margin = y_span * 0.10 if len(subset) == 1 else y_span * 0.04
+                    ax.set_ylim(bottom=max(0, y_min - y_span * 0.05), top=y_max + top_margin)
 
         grid_which = "both" if (use_log_scale or use_log_y_scale) else "major"
         ax.grid(True, which=grid_which, linestyle="--", alpha=0.6)
@@ -457,18 +458,29 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results,
     # ==================================================================
     stable_family = {m: pts for m, pts in model_data.items() if m == "StableCodec"}
     if stable_family:
+        stable_pts = stable_family.get("StableCodec", [])
+        stable_bpps = [p["bpp"] for p in stable_pts if p.get("bpp", 0) > 0]
+        if stable_bpps:
+            min_b = min(stable_bpps)
+            max_b = max(stable_bpps)
+            b_span = max_b - min_b
+            pad = b_span * 0.08 if b_span > 0 else min_b * 0.08
+            stable_xlim = (max(0, min_b - pad), max_b + pad)
+        else:
+            stable_xlim = None
+
         _plot_rd_metric(stable_family, "psnr",  "PSNR (dB)",
                         "StableCodec — Checkpoint Finetuning Progression (PSNR)",
-                        "family_stablecodec_psnr")
+                        "family_stablecodec_psnr", xlim=stable_xlim)
         _plot_rd_metric(stable_family, "ssim",  "SSIM",
                         "StableCodec — Checkpoint Finetuning Progression (SSIM)",
-                        "family_stablecodec_ssim")
+                        "family_stablecodec_ssim", xlim=stable_xlim)
         _plot_rd_metric(stable_family, "lpips", "LPIPS (Lower is Better)",
                         "StableCodec — Checkpoint Finetuning Progression (LPIPS)",
-                        "family_stablecodec_lpips", legend_loc="upper right")
+                        "family_stablecodec_lpips", legend_loc="upper right", xlim=stable_xlim)
         _plot_rd_metric(stable_family, "vmaf",  "VMAF (Higher is Better)",
                         "StableCodec — Checkpoint Finetuning Progression (VMAF)",
-                        "family_stablecodec_vmaf")
+                        "family_stablecodec_vmaf", xlim=stable_xlim)
 
     # ==================================================================
     # Family Breakdown 3 — Standard Video Codecs (AV1, HEVC, AVC)

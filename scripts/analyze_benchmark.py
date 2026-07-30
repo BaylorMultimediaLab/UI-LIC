@@ -276,9 +276,31 @@ def get_top_performing_models(model_data, bd_results, n=6):
     return filtered, scores
 
 
-def generate_all_plots(output_dir, model_data, variance_stats, bd_results):
+def generate_all_plots(output_dir, model_data, variance_stats, bd_results,
+                       use_log_scale=False, use_log_y_scale=False,
+                       crop_neural=False, max_bpp=None):
     os.makedirs(output_dir, exist_ok=True)
     plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
+
+    scale_tag = ""
+    if use_log_scale and use_log_y_scale:
+        scale_tag = " (Log-Log Scale)"
+    elif use_log_scale:
+        scale_tag = " (Log X Scale)"
+    elif use_log_y_scale:
+        scale_tag = " (Log Y Scale)"
+
+    # Determine upper BPP limit for plots
+    if max_bpp is not None:
+        target_upper_bpp = float(max_bpp)
+    elif crop_neural:
+        non_trad_bpps = [
+            p["bpp"] for m, pts in model_data.items()
+            if m not in {"AV1", "HEVC", "AVC"} for p in pts if p.get("bpp", 0) > 0
+        ]
+        target_upper_bpp = max(non_trad_bpps) * 1.05 if non_trad_bpps else 2.5
+    else:
+        target_upper_bpp = 2.5
 
     # ------------------------------------------------------------------
     # Shared helper: produce one BPP-vs-metric RD curve plot
@@ -288,15 +310,26 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results):
         fig, ax = plt.subplots(figsize=(8, 6), dpi=300)
         plotted_any = False
         all_bpps = []
+        all_vals = []
         for model, pts in subset.items():
             if not pts:
                 continue
-            bpps = [p["bpp"] for p in pts]
-            vals = [p[metric_key] for p in pts]
+            # Filter out non-positive bpp or metric values when in log scale
+            valid_pts = pts
+            if use_log_scale:
+                valid_pts = [p for p in valid_pts if p["bpp"] > 0]
+            if use_log_y_scale:
+                valid_pts = [p for p in valid_pts if p[metric_key] > 0]
+
+            if not valid_pts:
+                continue
+            bpps = [p["bpp"] for p in valid_pts]
+            vals = [p[metric_key] for p in valid_pts]
             # Skip models where the metric was never computed (all zeros).
             if all(v == 0.0 for v in vals):
                 continue
             all_bpps.extend(bpps)
+            all_vals.extend(vals)
             c = COLOR_MAP.get(model, "#333333")
             mk = MARKER_MAP.get(model, "o")
             ax.plot(bpps, vals, label=model, color=c, marker=mk,
@@ -304,7 +337,7 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results):
             
             # Annotate checkpoint quality labels when plotting a single model family (e.g. StableCodec)
             if len(subset) == 1:
-                for p in pts:
+                for p in valid_pts:
                     q_tag = p.get("quality", "")
                     if q_tag and q_tag != "default":
                         ax.annotate(q_tag, (p["bpp"], p[metric_key]),
@@ -316,16 +349,69 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results):
             plt.close()
             return  # Nothing to plot — metric not available
 
-        ax.set_xlabel("Bit-Per-Pixel (BPP)", fontsize=12, fontweight='bold')
-        ax.set_ylabel(ylabel, fontsize=12, fontweight='bold')
-        ax.set_title(title, fontsize=14, fontweight='bold', pad=10)
+        from matplotlib.ticker import FuncFormatter, NullFormatter
+
+        if use_log_scale:
+            ax.set_xscale('log')
+            ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _: f"{x:g}"))
+            ax.xaxis.set_minor_formatter(NullFormatter())
+            ax.set_xlabel("Bit-Per-Pixel (BPP) [Log Scale]", fontsize=12, fontweight='bold')
+        else:
+            ax.set_xlabel("Bit-Per-Pixel (BPP)", fontsize=12, fontweight='bold')
+
+        if use_log_y_scale:
+            ax.set_yscale('log')
+            ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: f"{y:g}"))
+            ax.yaxis.set_minor_formatter(NullFormatter())
+            ax.set_ylabel(f"{ylabel} [Log Scale]", fontsize=12, fontweight='bold')
+        else:
+            ax.set_ylabel(ylabel, fontsize=12, fontweight='bold')
+
+        ax.set_title(f"{title}{scale_tag}", fontsize=14, fontweight='bold', pad=10)
         
         if xlim is not None:
-            ax.set_xlim(xlim)
+            right_bound = min(xlim[1], target_upper_bpp) if (crop_neural or max_bpp is not None) else xlim[1]
+            if use_log_scale and xlim[0] <= 0:
+                min_bpp = min(all_bpps) if all_bpps else 0.01
+                ax.set_xlim(left=min_bpp * 0.85, right=right_bound)
+            else:
+                ax.set_xlim(left=xlim[0], right=right_bound)
         elif all_bpps and max(all_bpps) > 0:
-            ax.set_xlim(left=0, right=max(all_bpps) * 1.1)
+            min_bpp = min(all_bpps) if use_log_scale else 0
+            right_bound = target_upper_bpp if (crop_neural or max_bpp is not None) else max(all_bpps) * 1.1
+            ax.set_xlim(left=min_bpp * 0.85 if use_log_scale else 0, right=right_bound)
 
-        ax.grid(True, linestyle="--", alpha=0.6)
+        # Tighten Y-axis limits strictly around points visible within the active X-axis range
+        left_bound, right_bound = ax.get_xlim()
+        visible_vals = []
+        neural_visible_vals = []
+        for model, pts in subset.items():
+            for p in pts:
+                b_val = p.get("bpp", 0)
+                m_val = p.get(metric_key, 0)
+                if left_bound <= b_val <= right_bound and m_val > 0:
+                    visible_vals.append(m_val)
+                    if model not in {"AV1", "HEVC", "AVC"}:
+                        neural_visible_vals.append(m_val)
+
+        if visible_vals:
+            y_min = min(visible_vals)
+            # When neural focus is active, cap top of Y-axis to max neural codec metric value,
+            # allowing traditional codec peaks (AV1/HEVC) to exit off the top border.
+            if (crop_neural or max_bpp is not None) and neural_visible_vals:
+                y_max = max(neural_visible_vals)
+            else:
+                y_max = max(visible_vals)
+
+            y_span = y_max - y_min
+            if y_span > 0:
+                if use_log_y_scale:
+                    ax.set_ylim(bottom=y_min * 0.98, top=y_max * 1.02)
+                else:
+                    ax.set_ylim(bottom=max(0, y_min - y_span * 0.05), top=y_max + y_span * 0.04)
+
+        grid_which = "both" if (use_log_scale or use_log_y_scale) else "major"
+        ax.grid(True, which=grid_which, linestyle="--", alpha=0.6)
         ax.legend(fontsize=9, loc=legend_loc, frameon=True)
         plt.tight_layout()
         plt.savefig(os.path.join(output_dir, f"{filename}.png"), dpi=300)
@@ -337,16 +423,16 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results):
     # ==================================================================
     _plot_rd_metric(model_data, "psnr",  "PSNR (dB)",
                     "RD Curves — All Models (PSNR)",
-                    "rd_curve_psnr", xlim=(0, 2.5))
+                    "rd_curve_psnr", xlim=(0, target_upper_bpp))
     _plot_rd_metric(model_data, "ssim",  "SSIM",
                     "RD Curves — All Models (SSIM)",
-                    "rd_curve_ssim", xlim=(0, 2.5))
+                    "rd_curve_ssim", xlim=(0, target_upper_bpp))
     _plot_rd_metric(model_data, "lpips", "LPIPS (Lower is Better)",
                     "RD Curves — All Models (LPIPS)",
-                    "rd_curve_lpips", legend_loc="upper right", xlim=(0, 2.5))
+                    "rd_curve_lpips", legend_loc="upper right", xlim=(0, target_upper_bpp))
     _plot_rd_metric(model_data, "vmaf",  "VMAF (Higher is Better)",
                     "RD Curves — All Models (VMAF)",
-                    "rd_curve_vmaf", xlim=(0, 2.5))
+                    "rd_curve_vmaf", xlim=(0, target_upper_bpp))
 
     # ==================================================================
     # Family Breakdown 1 — HPCM (Base vs Large, MSE vs SSIM)
@@ -392,16 +478,16 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results):
     if std_family:
         _plot_rd_metric(std_family, "psnr",  "PSNR (dB)",
                         "Standard Codecs Comparison — AV1 vs HEVC vs AVC (PSNR)",
-                        "family_standard_codecs_psnr", xlim=(0, 2.5))
+                        "family_standard_codecs_psnr", xlim=(0, target_upper_bpp))
         _plot_rd_metric(std_family, "ssim",  "SSIM",
                         "Standard Codecs Comparison — AV1 vs HEVC vs AVC (SSIM)",
-                        "family_standard_codecs_ssim", xlim=(0, 2.5))
+                        "family_standard_codecs_ssim", xlim=(0, target_upper_bpp))
         _plot_rd_metric(std_family, "lpips", "LPIPS (Lower is Better)",
                         "Standard Codecs Comparison — AV1 vs HEVC vs AVC (LPIPS)",
-                        "family_standard_codecs_lpips", legend_loc="upper right", xlim=(0, 2.5))
+                        "family_standard_codecs_lpips", legend_loc="upper right", xlim=(0, target_upper_bpp))
         _plot_rd_metric(std_family, "vmaf",  "VMAF (Higher is Better)",
                         "Standard Codecs Comparison — AV1 vs HEVC vs AVC (VMAF)",
-                        "family_standard_codecs_vmaf", xlim=(0, 2.5))
+                        "family_standard_codecs_vmaf", xlim=(0, target_upper_bpp))
 
     # ==================================================================
     # Family Breakdown 4 — Neural Learned Image Codecs
@@ -426,12 +512,22 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results):
     # Extra — Variance shading (all models, PSNR only)
     # ==================================================================
     fig, ax = plt.subplots(figsize=(8, 6), dpi=300)
+    all_var_bpps = []
     for model, stats in variance_stats.items():
         if not stats:
             continue
-        bpps     = [s["mean_bpp"]  for s in stats]
-        psnrs    = [s["mean_psnr"] for s in stats]
-        std_psnrs = [s["std_psnr"] for s in stats]
+        valid_stats = stats
+        if use_log_scale:
+            valid_stats = [s for s in valid_stats if s["mean_bpp"] > 0]
+        if use_log_y_scale:
+            valid_stats = [s for s in valid_stats if s["mean_psnr"] > 0]
+
+        if not valid_stats:
+            continue
+        bpps      = [s["mean_bpp"]  for s in valid_stats]
+        psnrs     = [s["mean_psnr"] for s in valid_stats]
+        std_psnrs = [s["std_psnr"] for s in valid_stats]
+        all_var_bpps.extend(bpps)
         c  = COLOR_MAP.get(model, "#333333")
         mk = MARKER_MAP.get(model, "o")
         ax.plot(bpps, psnrs, label=model, color=c, marker=mk,
@@ -440,11 +536,31 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results):
                         np.array(psnrs) - np.array(std_psnrs),
                         np.array(psnrs) + np.array(std_psnrs),
                         color=c, alpha=0.15)
-    ax.set_xlabel("Bit-Per-Pixel (BPP)", fontsize=12, fontweight='bold')
-    ax.set_ylabel("PSNR (dB)", fontsize=12, fontweight='bold')
-    ax.set_title("RD Performance with Per-Image Variance Shading (±1 Std-Dev)",
-                 fontsize=14, fontweight='bold', pad=10)
-    ax.grid(True, linestyle="--", alpha=0.6)
+    
+    from matplotlib.ticker import FuncFormatter, NullFormatter
+    if use_log_scale:
+        ax.set_xscale('log')
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _: f"{x:g}"))
+        ax.xaxis.set_minor_formatter(NullFormatter())
+        ax.set_xlabel("Bit-Per-Pixel (BPP) [Log Scale]", fontsize=12, fontweight='bold')
+        if all_var_bpps:
+            ax.set_xlim(left=min(all_var_bpps) * 0.85, right=target_upper_bpp)
+    else:
+        ax.set_xlabel("Bit-Per-Pixel (BPP)", fontsize=12, fontweight='bold')
+        ax.set_xlim(left=0, right=target_upper_bpp)
+
+    if use_log_y_scale:
+        ax.set_yscale('log')
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: f"{y:g}"))
+        ax.yaxis.set_minor_formatter(NullFormatter())
+        ax.set_ylabel("PSNR (dB) [Log Scale]", fontsize=12, fontweight='bold')
+    else:
+        ax.set_ylabel("PSNR (dB)", fontsize=12, fontweight='bold')
+        
+    var_title = "RD Performance with Per-Image Variance Shading (±1 Std-Dev)"
+    ax.set_title(f"{var_title}{scale_tag}", fontsize=14, fontweight='bold', pad=10)
+    grid_which = "both" if (use_log_scale or use_log_y_scale) else "major"
+    ax.grid(True, which=grid_which, linestyle="--", alpha=0.6)
     ax.legend(fontsize=9, loc="lower right", frameon=True)
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "rd_curve_with_variance.png"), dpi=300)
@@ -529,13 +645,32 @@ def export_reports(output_dir, model_data, bd_results, variance_stats):
 
     print(f"SUCCESS: Exported README Markdown snippet to {md_path}")
 
-def run_analysis(results_dir, output_dir=None):
+def run_analysis(results_dir, output_dir=None, use_log_scale=False, use_log_y_scale=False, crop_neural=False, max_bpp=None):
     results_dir = os.path.abspath(os.path.expanduser(results_dir))
     if output_dir is None:
-        output_dir = os.path.join(results_dir, "analysis_report")
+        tag = ""
+        if use_log_scale and use_log_y_scale:
+            tag = "_loglog"
+        elif use_log_scale:
+            tag = "_log"
+        elif use_log_y_scale:
+            tag = "_logy"
+        if crop_neural or max_bpp is not None:
+            tag += "_cropped"
+        output_dir = os.path.join(results_dir, f"analysis_report{tag}")
     output_dir = os.path.abspath(os.path.expanduser(output_dir))
 
     print(f"Analyzing metrics in: {results_dir}")
+    print(f"Output directory set to: {output_dir}")
+    if use_log_scale:
+        print("Rendering RD plots using Logarithmic X (BPP) scale.")
+    if use_log_y_scale:
+        print("Rendering RD plots using Logarithmic Y scale.")
+    if crop_neural:
+        print("Cropping BPP axis to Neural Codec max range.")
+    elif max_bpp is not None:
+        print(f"Cropping BPP axis to max BPP = {max_bpp}")
+
     model_data = load_all_metrics(results_dir)
     if not model_data:
         print(f"No metric JSON files found in {results_dir}")
@@ -544,7 +679,9 @@ def run_analysis(results_dir, output_dir=None):
     variance_stats = compute_per_image_variance(model_data)
     bd_results = compute_all_bd_rates(model_data, anchors=["AV1", "HEVC", "AVC", "ELIC"])
 
-    generate_all_plots(output_dir, model_data, variance_stats, bd_results)
+    generate_all_plots(output_dir, model_data, variance_stats, bd_results,
+                       use_log_scale=use_log_scale, use_log_y_scale=use_log_y_scale,
+                       crop_neural=crop_neural, max_bpp=max_bpp)
     export_reports(output_dir, model_data, bd_results, variance_stats)
 
     summary_path = os.path.join(output_dir, "benchmark_summary.json")
@@ -559,5 +696,22 @@ def run_analysis(results_dir, output_dir=None):
     print(f"SUCCESS: Analysis report complete! Saved in: {output_dir}")
 
 if __name__ == "__main__":
-    target = sys.argv[1] if len(sys.argv) > 1 else "./results/kodak_benchmark"
-    run_analysis(target)
+    import argparse
+    parser = argparse.ArgumentParser(description="UI-LIC Metric Analysis, BD-Rate, and Plotting Suite")
+    parser.add_argument("results_dir", nargs="?", default="./results/kodak_benchmark",
+                        help="Directory containing benchmark results (default: ./results/kodak_benchmark)")
+    parser.add_argument("-o", "--output_dir", default=None,
+                        help="Output directory for analysis report and plots (default: <results_dir>/analysis_report)")
+    parser.add_argument("--log", "--log_scale", action="store_true", dest="use_log_scale",
+                        help="Render RD curves using a logarithmic scale for the BPP axis")
+    parser.add_argument("--log_y", "--log_y_scale", action="store_true", dest="use_log_y_scale",
+                        help="Render RD curves using a logarithmic scale for the Y metric axis")
+    parser.add_argument("--crop_neural", action="store_true",
+                        help="Crop BPP upper bound to maximum neural codec BPP, eliminating non-neural codec tails")
+    parser.add_argument("--max_bpp", type=float, default=None,
+                        help="Explicit maximum BPP upper bound for RD plots (e.g. --max_bpp 0.8)")
+    args = parser.parse_args()
+
+    run_analysis(args.results_dir, output_dir=args.output_dir,
+                 use_log_scale=args.use_log_scale, use_log_y_scale=args.use_log_y_scale,
+                 crop_neural=args.crop_neural, max_bpp=args.max_bpp)

@@ -396,10 +396,10 @@ Below are the Rate-Distortion (RD) curves, family breakdowns, and BD-rate saving
 
 | Metric | Vector Figure (SVG) |
 | :--- | :---: |
-| **PSNR (dB)** | <img src="results/kodak_benchmark/analysis_report_neural_focus/rd_curve_psnr.svg" width="500"/> |
-| **SSIM** | <img src="results/kodak_benchmark/analysis_report_neural_focus/rd_curve_ssim.svg" width="500"/> |
-| **LPIPS** *(Lower is Better)* | <img src="results/kodak_benchmark/analysis_report_neural_focus/rd_curve_lpips.svg" width="500"/> |
-| **Per-Image Variance ($\pm 1\sigma$)** | <img src="results/kodak_benchmark/analysis_report_neural_focus/rd_curve_with_variance.svg" width="500"/> |
+| **PSNR (dB)** | <img src="assets/benchmark_figures/rd_curve_psnr.svg" width="500"/> |
+| **SSIM** | <img src="assets/benchmark_figures/rd_curve_ssim.svg" width="500"/> |
+| **LPIPS** *(Lower is Better)* | <img src="assets/benchmark_figures/rd_curve_lpips.svg" width="500"/> |
+| **Per-Image Variance ($\pm 1\sigma$)** | <img src="assets/benchmark_figures/rd_curve_with_variance.svg" width="500"/> |
 
 </details>
 
@@ -414,30 +414,30 @@ Below are the Rate-Distortion (RD) curves, family breakdowns, and BD-rate saving
 
 | Metric | Vector Figure (SVG) |
 | :--- | :---: |
-| **PSNR (dB)** | <img src="results/kodak_benchmark/analysis_report/family_stablecodec_psnr.svg" width="500"/> |
-| **SSIM** | <img src="results/kodak_benchmark/analysis_report/family_stablecodec_ssim.svg" width="500"/> |
-| **LPIPS** *(Lower is Better)* | <img src="results/kodak_benchmark/analysis_report/family_stablecodec_lpips.svg" width="500"/> |
+| **PSNR (dB)** | <img src="assets/benchmark_figures/family_stablecodec_psnr.svg" width="500"/> |
+| **SSIM** | <img src="assets/benchmark_figures/family_stablecodec_ssim.svg" width="500"/> |
+| **LPIPS** *(Lower is Better)* | <img src="assets/benchmark_figures/family_stablecodec_lpips.svg" width="500"/> |
 
 #### Learned Neural Codecs Comparison
 | Metric | Vector Figure (SVG) |
 | :--- | :---: |
-| **PSNR (dB)** | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_neural_codecs_psnr.svg" width="500"/> |
-| **SSIM** | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_neural_codecs_ssim.svg" width="500"/> |
-| **LPIPS** *(Lower is Better)* | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_neural_codecs_lpips.svg" width="500"/> |
+| **PSNR (dB)** | <img src="assets/benchmark_figures/family_neural_codecs_psnr.svg" width="500"/> |
+| **SSIM** | <img src="assets/benchmark_figures/family_neural_codecs_ssim.svg" width="500"/> |
+| **LPIPS** *(Lower is Better)* | <img src="assets/benchmark_figures/family_neural_codecs_lpips.svg" width="500"/> |
 
 #### HPCM Model Family (Base vs Large, MSE vs SSIM)
 | Metric | Vector Figure (SVG) |
 | :--- | :---: |
-| **PSNR (dB)** | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_hpcm_psnr.svg" width="500"/> |
-| **SSIM** | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_hpcm_ssim.svg" width="500"/> |
-| **LPIPS** *(Lower is Better)* | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_hpcm_lpips.svg" width="500"/> |
+| **PSNR (dB)** | <img src="assets/benchmark_figures/family_hpcm_psnr.svg" width="500"/> |
+| **SSIM** | <img src="assets/benchmark_figures/family_hpcm_ssim.svg" width="500"/> |
+| **LPIPS** *(Lower is Better)* | <img src="assets/benchmark_figures/family_hpcm_lpips.svg" width="500"/> |
 
 #### Standard Video Codecs (AV1, HEVC, AVC)
 | Metric | Vector Figure (SVG) |
 | :--- | :---: |
-| **PSNR (dB)** | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_standard_codecs_psnr.svg" width="500"/> |
-| **SSIM** | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_standard_codecs_ssim.svg" width="500"/> |
-| **LPIPS** *(Lower is Better)* | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_standard_codecs_lpips.svg" width="500"/> |
+| **PSNR (dB)** | <img src="assets/benchmark_figures/family_standard_codecs_psnr.svg" width="500"/> |
+| **SSIM** | <img src="assets/benchmark_figures/family_standard_codecs_ssim.svg" width="500"/> |
+| **LPIPS** *(Lower is Better)* | <img src="assets/benchmark_figures/family_standard_codecs_lpips.svg" width="500"/> |
 
 </details>
 
@@ -450,11 +450,11 @@ Below are the Rate-Distortion (RD) curves, family breakdowns, and BD-rate saving
 
 | Reference Anchor | Vector Figure (SVG) |
 | :--- | :---: |
-| **Primary (AV1 Anchor)** | <img src="results/kodak_benchmark/analysis_report_neural_focus/bd_rate_bar_chart.svg" width="500"/> |
-| **AV1 Anchor** | <img src="results/kodak_benchmark/analysis_report_neural_focus/bd_rate_bar_chart_AV1.svg" width="500"/> |
-| **HEVC Anchor** | <img src="results/kodak_benchmark/analysis_report_neural_focus/bd_rate_bar_chart_HEVC.svg" width="500"/> |
-| **AVC Anchor** | <img src="results/kodak_benchmark/analysis_report_neural_focus/bd_rate_bar_chart_AVC.svg" width="500"/> |
-| **ELIC Anchor** | <img src="results/kodak_benchmark/analysis_report_neural_focus/bd_rate_bar_chart_ELIC.svg" width="500"/> |
+| **Primary (AV1 Anchor)** | <img src="assets/benchmark_figures/bd_rate_bar_chart.svg" width="500"/> |
+| **AV1 Anchor** | <img src="assets/benchmark_figures/bd_rate_bar_chart_AV1.svg" width="500"/> |
+| **HEVC Anchor** | <img src="assets/benchmark_figures/bd_rate_bar_chart_HEVC.svg" width="500"/> |
+| **AVC Anchor** | <img src="assets/benchmark_figures/bd_rate_bar_chart_AVC.svg" width="500"/> |
+| **ELIC Anchor** | <img src="assets/benchmark_figures/bd_rate_bar_chart_ELIC.svg" width="500"/> |
 
 </details>
 

@@ -381,3 +381,81 @@ The following models are integrated into the platform, each with a specialized i
 - **`eval.py`:** Removed erroneous `.item()` call on IQA metric tensors.
 - **`requirements.txt`:** Added `ninja` and `nvidia-cuda-nvcc` as explicit dependencies.
 
+---
+
+## Kodak Benchmark Results & Publication Vector Figures
+
+The **UI-LIC Kodak Benchmark Suite** evaluates 285 compression tasks across all integrated learned image codecs and standard video codecs on the Kodak dataset (24 images).
+
+Below are the Rate-Distortion (RD) curves, family breakdowns, and BD-rate savings bar charts rendered as lightweight, crisp SVG vector figures.
+
+<details style="margin-top: 16px; margin-bottom: 24px;">
+<summary><h2 style="display:inline">1. Unified Rate-Distortion (RD) Curves & Variance</h2></summary>
+
+<br/>
+
+| Metric | Vector Figure (SVG) |
+| :--- | :---: |
+| **PSNR (dB)** | <img src="results/kodak_benchmark/analysis_report_neural_focus/rd_curve_psnr.svg" width="500"/> |
+| **SSIM** | <img src="results/kodak_benchmark/analysis_report_neural_focus/rd_curve_ssim.svg" width="500"/> |
+| **LPIPS** *(Lower is Better)* | <img src="results/kodak_benchmark/analysis_report_neural_focus/rd_curve_lpips.svg" width="500"/> |
+| **Per-Image Variance ($\pm 1\sigma$)** | <img src="results/kodak_benchmark/analysis_report_neural_focus/rd_curve_with_variance.svg" width="500"/> |
+
+</details>
+
+<br/>
+
+<details style="margin-top: 16px; margin-bottom: 24px;">
+<summary><h2 style="display:inline">2. Model Family Breakdown Figures</h2></summary>
+
+<br/>
+
+#### StableCodec Checkpoint Finetuning Progression *(Scaled to Ultra-Low BPP Points)*
+
+| Metric | Vector Figure (SVG) |
+| :--- | :---: |
+| **PSNR (dB)** | <img src="results/kodak_benchmark/analysis_report/family_stablecodec_psnr.svg" width="500"/> |
+| **SSIM** | <img src="results/kodak_benchmark/analysis_report/family_stablecodec_ssim.svg" width="500"/> |
+| **LPIPS** *(Lower is Better)* | <img src="results/kodak_benchmark/analysis_report/family_stablecodec_lpips.svg" width="500"/> |
+
+#### Learned Neural Codecs Comparison
+| Metric | Vector Figure (SVG) |
+| :--- | :---: |
+| **PSNR (dB)** | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_neural_codecs_psnr.svg" width="500"/> |
+| **SSIM** | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_neural_codecs_ssim.svg" width="500"/> |
+| **LPIPS** *(Lower is Better)* | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_neural_codecs_lpips.svg" width="500"/> |
+
+#### HPCM Model Family (Base vs Large, MSE vs SSIM)
+| Metric | Vector Figure (SVG) |
+| :--- | :---: |
+| **PSNR (dB)** | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_hpcm_psnr.svg" width="500"/> |
+| **SSIM** | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_hpcm_ssim.svg" width="500"/> |
+| **LPIPS** *(Lower is Better)* | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_hpcm_lpips.svg" width="500"/> |
+
+#### Standard Video Codecs (AV1, HEVC, AVC)
+| Metric | Vector Figure (SVG) |
+| :--- | :---: |
+| **PSNR (dB)** | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_standard_codecs_psnr.svg" width="500"/> |
+| **SSIM** | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_standard_codecs_ssim.svg" width="500"/> |
+| **LPIPS** *(Lower is Better)* | <img src="results/kodak_benchmark/analysis_report_neural_focus/family_standard_codecs_lpips.svg" width="500"/> |
+
+</details>
+
+<br/>
+
+<details style="margin-top: 16px; margin-bottom: 24px;">
+<summary><h2 style="display:inline">3. BD-Rate Bitrate Savings Bar Charts</h2></summary>
+
+<br/>
+
+| Reference Anchor | Vector Figure (SVG) |
+| :--- | :---: |
+| **Primary (AV1 Anchor)** | <img src="results/kodak_benchmark/analysis_report_neural_focus/bd_rate_bar_chart.svg" width="500"/> |
+| **AV1 Anchor** | <img src="results/kodak_benchmark/analysis_report_neural_focus/bd_rate_bar_chart_AV1.svg" width="500"/> |
+| **HEVC Anchor** | <img src="results/kodak_benchmark/analysis_report_neural_focus/bd_rate_bar_chart_HEVC.svg" width="500"/> |
+| **AVC Anchor** | <img src="results/kodak_benchmark/analysis_report_neural_focus/bd_rate_bar_chart_AVC.svg" width="500"/> |
+| **ELIC Anchor** | <img src="results/kodak_benchmark/analysis_report_neural_focus/bd_rate_bar_chart_ELIC.svg" width="500"/> |
+
+</details>
+
+

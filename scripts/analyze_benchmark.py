@@ -417,6 +417,7 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results,
         plt.tight_layout()
         plt.savefig(os.path.join(output_dir, f"{filename}.png"), dpi=300)
         plt.savefig(os.path.join(output_dir, f"{filename}.pdf"))
+        plt.savefig(os.path.join(output_dir, f"{filename}.svg"))
         plt.close()
 
     # ==================================================================
@@ -577,6 +578,7 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results,
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "rd_curve_with_variance.png"), dpi=300)
     plt.savefig(os.path.join(output_dir, "rd_curve_with_variance.pdf"))
+    plt.savefig(os.path.join(output_dir, "rd_curve_with_variance.svg"))
     plt.close()
 
     # ==================================================================
@@ -618,9 +620,11 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results,
         plt.tight_layout()
         plt.savefig(os.path.join(output_dir, f"bd_rate_bar_chart_{anchor}.png"), dpi=300)
         plt.savefig(os.path.join(output_dir, f"bd_rate_bar_chart_{anchor}.pdf"))
+        plt.savefig(os.path.join(output_dir, f"bd_rate_bar_chart_{anchor}.svg"))
         if anchor == "AV1" or (anchor == list(bd_results.keys())[0] and "AV1" not in bd_results):
             plt.savefig(os.path.join(output_dir, "bd_rate_bar_chart.png"), dpi=300)
             plt.savefig(os.path.join(output_dir, "bd_rate_bar_chart.pdf"))
+            plt.savefig(os.path.join(output_dir, "bd_rate_bar_chart.svg"))
         plt.close()
 
     print(f"SUCCESS: Generated 300 DPI publication plots in {output_dir}")

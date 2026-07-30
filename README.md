@@ -453,6 +453,7 @@ Below are the Rate-Distortion (RD) curves, family breakdowns, and BD-rate saving
 | **AV1 Anchor** | <img src="assets/benchmark_figures/bd_rate_bar_chart_AV1.svg" width="500"/> |
 | **HEVC Anchor** | <img src="assets/benchmark_figures/bd_rate_bar_chart_HEVC.svg" width="500"/> |
 | **AVC Anchor** | <img src="assets/benchmark_figures/bd_rate_bar_chart_AVC.svg" width="500"/> |
+| **ELIC Anchor** | <img src="assets/benchmark_figures/bd_rate_bar_chart_ELIC.svg" width="500"/> |
 
 </details>
 

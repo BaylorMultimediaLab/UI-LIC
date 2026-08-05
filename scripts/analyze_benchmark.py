@@ -279,7 +279,19 @@ def get_top_performing_models(model_data, bd_results, n=6):
 def generate_all_plots(output_dir, model_data, variance_stats, bd_results,
                        use_log_scale=False, use_log_y_scale=False,
                        crop_neural=False, max_bpp=None):
+    png_dir = os.path.join(output_dir, "png")
+    pdf_dir = os.path.join(output_dir, "pdf")
+    svg_dir = os.path.join(output_dir, "svg")
     os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(png_dir, exist_ok=True)
+    os.makedirs(pdf_dir, exist_ok=True)
+    os.makedirs(svg_dir, exist_ok=True)
+
+    def _save_fig(fname):
+        plt.savefig(os.path.join(png_dir, f"{fname}.png"), dpi=300)
+        plt.savefig(os.path.join(pdf_dir, f"{fname}.pdf"))
+        plt.savefig(os.path.join(svg_dir, f"{fname}.svg"))
+
     plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
 
     scale_tag = ""
@@ -349,10 +361,11 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results,
             plt.close()
             return  # Nothing to plot — metric not available
 
-        from matplotlib.ticker import FuncFormatter, NullFormatter
+        from matplotlib.ticker import FuncFormatter, NullFormatter, LogLocator
 
         if use_log_scale:
             ax.set_xscale('log')
+            ax.xaxis.set_major_locator(LogLocator(base=10.0, subs=(1.0, 2.0, 5.0), numticks=10))
             ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _: f"{x:g}"))
             ax.xaxis.set_minor_formatter(NullFormatter())
             ax.set_xlabel("Bit-Per-Pixel (BPP) [Log Scale]", fontsize=12, fontweight='bold')
@@ -361,6 +374,7 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results,
 
         if use_log_y_scale:
             ax.set_yscale('log')
+            ax.yaxis.set_major_locator(LogLocator(base=10.0, subs='all', numticks=10))
             ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: f"{y:g}"))
             ax.yaxis.set_minor_formatter(NullFormatter())
             ax.set_ylabel(f"{ylabel} [Log Scale]", fontsize=12, fontweight='bold')
@@ -415,9 +429,7 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results,
         ax.grid(True, which=grid_which, linestyle="--", alpha=0.6)
         ax.legend(fontsize=9, loc=legend_loc, frameon=True)
         plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, f"{filename}.png"), dpi=300)
-        plt.savefig(os.path.join(output_dir, f"{filename}.pdf"))
-        plt.savefig(os.path.join(output_dir, f"{filename}.svg"))
+        _save_fig(filename)
         plt.close()
 
     # ==================================================================
@@ -550,9 +562,10 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results,
                         np.array(psnrs) + np.array(std_psnrs),
                         color=c, alpha=0.15)
     
-    from matplotlib.ticker import FuncFormatter, NullFormatter
+    from matplotlib.ticker import FuncFormatter, NullFormatter, LogLocator
     if use_log_scale:
         ax.set_xscale('log')
+        ax.xaxis.set_major_locator(LogLocator(base=10.0, subs=(1.0, 2.0, 5.0), numticks=10))
         ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _: f"{x:g}"))
         ax.xaxis.set_minor_formatter(NullFormatter())
         ax.set_xlabel("Bit-Per-Pixel (BPP) [Log Scale]", fontsize=12, fontweight='bold')
@@ -564,6 +577,7 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results,
 
     if use_log_y_scale:
         ax.set_yscale('log')
+        ax.yaxis.set_major_locator(LogLocator(base=10.0, subs='all', numticks=10))
         ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: f"{y:g}"))
         ax.yaxis.set_minor_formatter(NullFormatter())
         ax.set_ylabel("PSNR (dB) [Log Scale]", fontsize=12, fontweight='bold')
@@ -576,9 +590,7 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results,
     ax.grid(True, which=grid_which, linestyle="--", alpha=0.6)
     ax.legend(fontsize=9, loc="lower right", frameon=True)
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "rd_curve_with_variance.png"), dpi=300)
-    plt.savefig(os.path.join(output_dir, "rd_curve_with_variance.pdf"))
-    plt.savefig(os.path.join(output_dir, "rd_curve_with_variance.svg"))
+    _save_fig("rd_curve_with_variance")
     plt.close()
 
     # ==================================================================
@@ -618,13 +630,9 @@ def generate_all_plots(output_dir, model_data, variance_stats, bd_results,
                         ha='center', va='bottom' if yval >= 0 else 'top',
                         fontsize=9, fontweight='bold')
         plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, f"bd_rate_bar_chart_{anchor}.png"), dpi=300)
-        plt.savefig(os.path.join(output_dir, f"bd_rate_bar_chart_{anchor}.pdf"))
-        plt.savefig(os.path.join(output_dir, f"bd_rate_bar_chart_{anchor}.svg"))
+        _save_fig(f"bd_rate_bar_chart_{anchor}")
         if anchor == "AV1" or (anchor == list(bd_results.keys())[0] and "AV1" not in bd_results):
-            plt.savefig(os.path.join(output_dir, "bd_rate_bar_chart.png"), dpi=300)
-            plt.savefig(os.path.join(output_dir, "bd_rate_bar_chart.pdf"))
-            plt.savefig(os.path.join(output_dir, "bd_rate_bar_chart.svg"))
+            _save_fig("bd_rate_bar_chart")
         plt.close()
 
     print(f"SUCCESS: Generated 300 DPI publication plots in {output_dir}")

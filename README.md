@@ -457,4 +457,79 @@ Below are the Rate-Distortion (RD) curves, family breakdowns, and BD-rate saving
 
 </details>
 
+<br/>
+
+<details style="margin-top: 16px; margin-bottom: 24px;">
+<summary><h2 style="display:inline">4. BD-Rate Benchmark Results Tables</h2></summary>
+
+<br/>
+
+> **Note:** Generative codecs (e.g. StableCodec) are excluded from BD-rate comparison. BD-rate requires both codecs to perform faithful signal reconstruction on the same quality axis. Diffusion-based codecs synthesise plausible images rather than reconstructing pixels, making cross-paradigm BD comparisons conceptually invalid.
+
+### BD-Rate Comparison (Anchor: `AV1`)
+
+| Model | Type | BD-Rate (PSNR) | BD-Rate (SSIM) | BD-Rate (LPIPS) | BD-PSNR (dB) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **HEVC** | Predictive | +6.69% | +0.78% | -9.23% | -0.27 dB |
+| **RwkvCompress** | Predictive | -10.98% | +5.44% | +11.50% | +0.52 dB |
+| **HPCM_Base_SSIM** | Predictive | +114.99% | -3.46% | +2.15% | -2.93 dB |
+| **HPCM_Base** | Predictive | -13.79% | +2.92% | +12.71% | +0.67 dB |
+| **DCVC-RT** | Predictive | -44.52% | -34.45% | -28.83% | +2.54 dB |
+| **AVC** | Predictive | +20.96% | +9.33% | -8.24% | -0.79 dB |
+| **ELIC** | Predictive | -38.29% | -29.66% | -24.17% | +2.10 dB |
+| **StableCodec** | Generative | — | — | — | — |
+| **LIC-TCM** | Predictive | -4.20% | +10.14% | +18.29% | +0.26 dB |
+| **HPCM_Large_SSIM** | Predictive | +105.15% | -5.19% | +0.50% | -2.78 dB |
+| **HPCM_Large** | Predictive | -17.40% | +1.24% | +11.97% | +0.85 dB |
+
+### BD-Rate Comparison (Anchor: `HEVC`)
+
+| Model | Type | BD-Rate (PSNR) | BD-Rate (SSIM) | BD-Rate (LPIPS) | BD-PSNR (dB) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **AV1** | Predictive | -6.27% | -0.77% | +10.17% | +0.27 dB |
+| **RwkvCompress** | Predictive | -16.99% | +3.35% | +21.17% | +0.88 dB |
+| **HPCM_Base_SSIM** | Predictive | +79.39% | -5.95% | +10.56% | -2.48 dB |
+| **HPCM_Base** | Predictive | -19.52% | +1.24% | +22.70% | +1.03 dB |
+| **DCVC-RT** | Predictive | -52.83% | -45.41% | -37.03% | +3.15 dB |
+| **AVC** | Predictive | +7.57% | +0.49% | -7.65% | -0.35 dB |
+| **ELIC** | Predictive | -46.44% | -39.34% | -29.30% | +2.70 dB |
+| **StableCodec** | Generative | — | — | — | — |
+| **LIC-TCM** | Predictive | -10.07% | +9.73% | +29.48% | +0.59 dB |
+| **HPCM_Large_SSIM** | Predictive | +72.87% | -7.73% | +8.59% | -2.32 dB |
+| **HPCM_Large** | Predictive | -23.20% | -1.65% | +20.08% | +1.24 dB |
+
+### BD-Rate Comparison (Anchor: `AVC`)
+
+| Model | Type | BD-Rate (PSNR) | BD-Rate (SSIM) | BD-Rate (LPIPS) | BD-PSNR (dB) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **HEVC** | Predictive | -7.04% | -0.48% | +8.28% | +0.35 dB |
+| **AV1** | Predictive | -17.32% | -8.53% | +8.98% | +0.79 dB |
+| **RwkvCompress** | Predictive | -26.79% | -4.67% | +19.93% | +1.42 dB |
+| **HPCM_Base_SSIM** | Predictive | +65.79% | -13.17% | +9.33% | -2.00 dB |
+| **HPCM_Base** | Predictive | -29.04% | -6.71% | +21.39% | +1.57 dB |
+| **DCVC-RT** | Predictive | -57.51% | -47.66% | -35.28% | +3.49 dB |
+| **ELIC** | Predictive | -51.85% | -42.36% | -28.10% | +3.00 dB |
+| **StableCodec** | Generative | — | — | — | — |
+| **LIC-TCM** | Predictive | -20.91% | +0.80% | +28.09% | +1.16 dB |
+| **HPCM_Large_SSIM** | Predictive | +59.71% | -14.79% | +7.41% | -1.85 dB |
+| **HPCM_Large** | Predictive | -32.18% | -9.04% | +19.02% | +1.74 dB |
+
+### BD-Rate Comparison (Anchor: `ELIC`)
+
+| Model | Type | BD-Rate (PSNR) | BD-Rate (SSIM) | BD-Rate (LPIPS) | BD-PSNR (dB) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **HEVC** | Predictive | +86.71% | +64.86% | +41.44% | -2.70 dB |
+| **AV1** | Predictive | +62.05% | +42.17% | +31.88% | -2.10 dB |
+| **RwkvCompress** | Predictive | +43.56% | +50.04% | +46.99% | -1.63 dB |
+| **HPCM_Base_SSIM** | Predictive | +278.18% | +38.02% | +35.95% | -4.97 dB |
+| **HPCM_Base** | Predictive | +38.69% | +46.05% | +48.18% | -1.47 dB |
+| **DCVC-RT** | Predictive | -11.30% | -6.95% | -7.35% | +0.45 dB |
+| **AVC** | Predictive | +107.70% | +73.50% | +39.07% | -3.00 dB |
+| **StableCodec** | Generative | — | — | — | — |
+| **LIC-TCM** | Predictive | +53.85% | +55.22% | +53.08% | -1.98 dB |
+| **HPCM_Large_SSIM** | Predictive | +263.45% | +35.62% | +34.14% | -4.83 dB |
+| **HPCM_Large** | Predictive | +33.46% | +44.76% | +48.45% | -1.26 dB |
+
+</details>
+
 
